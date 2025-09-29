@@ -1,8 +1,20 @@
 {
-  "url": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-  "username": "",
-  "password": "",
-  "interval_seconds": 10
+  "pollers": [
+    {
+      "name": "area1",
+      "url": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
+      "username": "admin",
+      "password": "thinh0702",
+      "interval_seconds": 10
+    }
+  ],
+  "mqtt": {
+    "enabled": false,
+    "host": "localhost",
+    "port": 1883,
+    "topic": "camera/areaTemperature",
+    "username": "",
+    "password": ""
+  }
 }
-
 
