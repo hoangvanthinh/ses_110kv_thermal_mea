@@ -42,23 +42,19 @@ def main() -> None:
         t.start()
         poller_threads.append(t)
 
-    # Start optional MQTT publisher
+    # Start publisher unconditionally; worker will drain to stdout if MQTT disabled
     mqtt_cfg = config.get("mqtt", {}) or {}
-    mqtt_enabled = bool(mqtt_cfg.get("enabled", False))
-    mqtt_thread: Optional[threading.Thread] = None
-    if mqtt_enabled:
-        mqtt_thread = threading.Thread(
-            target=mqtt_publisher_worker,
-            args=(mqtt_cfg, out_queue, stop_event),
-            daemon=True,
-            name="mqtt-publisher",
-        )
-        mqtt_thread.start()
+    mqtt_thread: Optional[threading.Thread] = threading.Thread(
+        target=mqtt_publisher_worker,
+        args=(mqtt_cfg, out_queue, stop_event),
+        daemon=True,
+        name="mqtt-publisher",
+    )
+    mqtt_thread.start()
 
     log.info(
-        "Started %d poller(s)%s. Press Ctrl+C to stop.",
+        "Started %d poller(s). Press Ctrl+C to stop.",
         len(poller_threads),
-        " with MQTT" if mqtt_enabled else "",
     )
 
     try:
