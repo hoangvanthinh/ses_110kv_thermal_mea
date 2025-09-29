@@ -17,9 +17,7 @@ def poller_worker(
     interval_seconds: int,
     out_queue: "queue.Queue[QueueItem]",
     stop_event: threading.Event,
-    url: Optional[str] = None,
-    url_presetID: Optional[str] = None,
-    url_areaTemperature: Optional[str] = None,
+    cameras: Optional[List[dict]] = None,
     username: Optional[str] = None,
     password: Optional[str] = None,
     timeout_seconds: Optional[float] = None,
@@ -31,7 +29,10 @@ def poller_worker(
             url_for_item: str
 
             # Two-step mode: preset -> wait -> read temperature
-            if url_presetID and url_areaTemperature:
+            if cameras:
+                for camera in cameras:
+                    url_presetID = camera.get("url_presetID")
+                    url_areaTemperature = camera.get("url_areaTemperature")
                 try:
                     _ = fetch_text(
                         url_presetID,
@@ -66,18 +67,20 @@ def poller_worker(
                 )
                 url_for_item = url_areaTemperature
 
-            # # Legacy single-URL mode
-            # elif url:
-            #     data = fetch_text(
-            #         url,
-            #         timeout_seconds=timeout_seconds or 5.0,
-            #         username=username,
-            #         password=password,
-            #     )
-            #     url_for_item = url
-            # else:
-            #     log.error("[%s] No URL configured", name)
-            #     break
+            # Legacy single-URL mode
+            elif cameras:
+                for camera in cameras:
+                    url = camera.get("url_areaTemperature")
+                data = fetch_text(
+                    url,
+                    timeout_seconds=timeout_seconds or 5.0,
+                    username=username,
+                    password=password,
+                )
+                url_for_item = url
+            else:
+                log.error("[%s] No URL configured", name)
+                break
             timestamp = datetime.now().isoformat(timespec="seconds")
             out_queue.put(
                 {

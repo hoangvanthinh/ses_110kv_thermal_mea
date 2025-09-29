@@ -42,7 +42,7 @@ def main() -> None:
                 int(p.get("interval_seconds", 10)),
                 out_queue,
                 stop_event,
-                p.get("url") or None,
+                p.get("cameras") or None,
                 p.get("url_presetID") or None,
                 p.get("url_areaTemperature") or None,
                 p.get("username") or None,
