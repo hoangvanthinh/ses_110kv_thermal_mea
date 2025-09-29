@@ -1,17 +1,19 @@
 {
   "pollers": [
     {
-      "name": "area1",
-      "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
-      "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-      "username": "admin",
-      "password": "thinh0702",
-      "interval_seconds": 10
-    },
-    {
-      "name": "area2",
-      "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=2",
-      "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2",
+      "name": "camera1",
+      "cameras": [
+        {
+          "name": "area1",
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
+          "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+        },
+        {
+          "name": "area2",
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=2", 
+          "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2"
+        }
+      ],
       "username": "admin",
       "password": "thinh0702",
       "interval_seconds": 10
