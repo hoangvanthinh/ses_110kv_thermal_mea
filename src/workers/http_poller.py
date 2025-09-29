@@ -39,6 +39,7 @@ def poller_worker(
                 },
                 block=False,
             )
+            log.info("[%s] Polled data: %s", name, data)
         except HTTPError as e:
             log.error("[%s] HTTP error: %s %s", name, e.code, e.reason)
         except URLError as e:
@@ -51,5 +52,3 @@ def poller_worker(
 
 
 __all__ = ["poller_worker"]
-
-
