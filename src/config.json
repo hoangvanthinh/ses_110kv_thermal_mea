@@ -21,7 +21,8 @@
       ],
       "username": "admin",
       "password": "thinh0702",
-      "interval_seconds": 20
+      "interval_seconds": 10,
+      "rtsp_endpoint": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1"
     }
   ],
   "mqtt": {
