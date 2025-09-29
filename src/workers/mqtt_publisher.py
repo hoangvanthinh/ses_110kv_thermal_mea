@@ -72,9 +72,9 @@ def mqtt_publisher_worker(
             if item is None:
                 break
 
-            camera_seg = item.get('node_thermal') or 'unknown'
-
-            topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
+            # camera_seg = item.get('node_thermal') or 'unknown'
+            # topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
+            topic = base_topic
             payload = json.dumps(item, ensure_ascii=False)
             log.info("MQTT publish")
             try:
