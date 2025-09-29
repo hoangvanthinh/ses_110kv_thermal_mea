@@ -70,16 +70,16 @@ def poller_worker(
                     )
 
                     timestamp = datetime.now().isoformat(timespec="seconds")
-                    # out_queue.put(
-                    #     {
-                    #         "poller": name,
-                    #         "node_thermal": node_thermal_name,
-                    #         "url": url_areaTemperature,
-                    #         "timestamp": timestamp,
-                    #         "data": data,
-                    #     },
-                    #     block=False,
-                    # )
+                    out_queue.put(
+                        {
+                            "poller": name,
+                            "node_thermal": node_thermal_name,
+                            "url": url_areaTemperature,
+                            "timestamp": timestamp,
+                            "data": data,
+                        },
+                        block=False,
+                    )
                     log.info("[%s] Polled data: %s", name, data)
                     if stop_event.wait(wait_seconds):
                         break

@@ -73,10 +73,14 @@ def mqtt_publisher_worker(
                 break
 
             camera_seg = item.get('node_thermal') or 'unknown'
+
             topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
             payload = json.dumps(item, ensure_ascii=False)
+            log.info("MQTT publish")
             try:
-                client.publish(topic, payload, qos=0, retain=False)
+                client.publish(base_topic, payload, qos=0, retain=False)
+                # log.info("topic: %s", base_topic)
+                # client.publish(base_topic, "hello", qos=0, retain=False)
             except Exception as e:
                 log.error("MQTT publish error: %s", e)
     finally:
@@ -88,5 +92,3 @@ def mqtt_publisher_worker(
 
 
 __all__ = ["mqtt_publisher_worker"]
-
-
