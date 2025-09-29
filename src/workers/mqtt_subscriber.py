@@ -10,7 +10,9 @@ log = get_logger("workers.mqtt_subscriber")
 def mqtt_subscriber_worker(
     settings: Dict[str, Any],
     stop_event: threading.Event,
+    cmd_queue: "queue.Queue[str]" = None,
 ) -> None:
+    import queue
     try:
         import paho.mqtt.client as mqtt  # type: ignore
     except Exception:
@@ -51,7 +53,16 @@ def mqtt_subscriber_worker(
             payload_text = msg.payload.decode("utf-8", errors="replace")
         except Exception:
             payload_text = "<binary>"
-        log.info("[MQTT] %s -> %s", msg.topic, payload_text)
+        topic = msg.topic
+        log.info("[MQTT] %s -> %s", topic, payload_text)
+        if cmd_queue is not None:
+            try:
+                if topic.endswith("/get_url") or topic.endswith("/get_url_rtsp"):
+                    cmd_queue.put_nowait("get_url_rtsp")
+                elif topic.endswith("/cmd"):
+                    cmd_queue.put_nowait(payload_text.strip())
+            except queue.Full:
+                log.error("Command queue is full; dropping command from %s", topic)
 
     client.on_connect = on_connect
     client.on_message = on_message
