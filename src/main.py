@@ -1,21 +1,9 @@
 import threading
 import time
-import base64
-import json
-import os
 import queue
-from datetime import datetime
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
 from typing import List, Optional
 
 from config_loader import load_config
-import queue
-import threading
-import time
-from datetime import datetime
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
 
 from utils.logging import get_logger
 from workers.http_poller import poller_worker
@@ -43,8 +31,6 @@ def main() -> None:
                 out_queue,
                 stop_event,
                 p.get("cameras") or None,
-                p.get("url_presetID") or None,
-                p.get("url_areaTemperature") or None,
                 p.get("username") or None,
                 p.get("password") or None,
                 float(p.get("timeout_seconds", 5.0)),

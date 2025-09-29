@@ -25,7 +25,14 @@ def mqtt_publisher_worker(
                 continue
             if item is None:
                 break
-            log.info("[%s] %s -> %s\n%s", item.get("timestamp"), item.get("poller"), item.get("url"), item.get("data"))
+            log.info(
+                "[%s] %s/%s -> %s\n%s",
+                item.get("timestamp"),
+                item.get("poller"),
+                item.get("camera") or "unknown",
+                item.get("url"),
+                item.get("data"),
+            )
         return
 
     client = mqtt.Client()
@@ -53,7 +60,8 @@ def mqtt_publisher_worker(
             if item is None:
                 break
 
-            topic = f"{base_topic}/{item.get('poller','unknown')}"
+            camera_seg = item.get('camera') or 'unknown'
+            topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
             payload = json.dumps(item, ensure_ascii=False)
             try:
                 client.publish(topic, payload, qos=0, retain=False)
