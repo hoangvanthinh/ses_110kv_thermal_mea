@@ -30,7 +30,7 @@ def main() -> None:
                 int(p.get("interval_seconds", 10)),
                 out_queue,
                 stop_event,
-                p.get("cameras") or None,
+                p.get("node_thermals") or None,
                 p.get("username") or None,
                 p.get("password") or None,
                 float(p.get("timeout_seconds", 5.0)),
