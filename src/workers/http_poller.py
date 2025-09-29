@@ -17,7 +17,7 @@ def poller_worker(
     interval_seconds: int,
     out_queue: "queue.Queue[QueueItem]",
     stop_event: threading.Event,
-    cameras: Optional[List[dict]] = None,
+    node_thermals: Optional[List[dict]] = None,
     username: Optional[str] = None,
     password: Optional[str] = None,
     timeout_seconds: Optional[float] = None,
@@ -25,14 +25,14 @@ def poller_worker(
 ) -> None:
     while not stop_event.is_set():
         try:
-            # Two-step mode per camera: preset -> wait -> read temperature
-            if cameras:
-                for camera in cameras:
-                    url_presetID = camera.get("url_presetID")
-                    url_areaTemperature = camera.get("url_areaTemperature")
-                    camera_name = camera.get("name") or "unknown"
+            # Two-step mode per node_thermal: preset -> wait -> read temperature
+            if node_thermals:
+                for node_thermal in node_thermals:
+                    url_presetID = node_thermal.get("url_presetID")
+                    url_areaTemperature = node_thermal.get("url_areaTemperature")
+                    node_thermal_name = node_thermal.get("name") or "unknown"
                     if not url_areaTemperature:
-                        log.error("[%s] Missing url_areaTemperature for a camera entry", name)
+                        log.error("[%s] Missing url_areaTemperature for a node_thermal entry", name)
                         continue
 
                     if url_presetID:
@@ -51,7 +51,7 @@ def poller_worker(
                             log.error("[%s] Preset URL error: %s", name, e.reason)
                             continue
 
-                        # Allow camera to settle before reading temperature
+                        # Allow node_thermal to settle before reading temperature
                         wait_seconds = (settle_seconds if settle_seconds is not None else 2.0)
                         if stop_event.wait(wait_seconds):
                             break
@@ -67,7 +67,7 @@ def poller_worker(
                     out_queue.put(
                         {
                             "poller": name,
-                            "camera": camera_name,
+                            "node_thermal": node_thermal_name,
                             "url": url_areaTemperature,
                             "timestamp": timestamp,
                             "data": data,
@@ -76,7 +76,7 @@ def poller_worker(
                     )
                     log.info("[%s] Polled data: %s", name, data)
             else:
-                log.error("[%s] No cameras configured", name)
+                log.error("[%s] No node_thermals configured", name)
                 break
         except HTTPError as e:
             log.error("[%s] HTTP error: %s %s", name, e.code, e.reason)

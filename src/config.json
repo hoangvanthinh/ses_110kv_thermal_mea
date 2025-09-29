@@ -2,7 +2,7 @@
   "pollers": [
     {
       "name": "camera1",
-      "cameras": [
+      "node_thermals": [
         {
           "name": "area1",
           "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
