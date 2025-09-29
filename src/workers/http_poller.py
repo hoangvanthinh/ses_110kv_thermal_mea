@@ -1,7 +1,7 @@
 import threading
 import queue
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 import time
 
 from utils.http import fetch_text, HTTPError, URLError
@@ -25,73 +25,64 @@ def poller_worker(
 ) -> None:
     while not stop_event.is_set():
         try:
-            data: str
-            url_for_item: str
-
-            # Two-step mode: preset -> wait -> read temperature
+            # Two-step mode per camera: preset -> wait -> read temperature
             if cameras:
                 for camera in cameras:
                     url_presetID = camera.get("url_presetID")
                     url_areaTemperature = camera.get("url_areaTemperature")
-                try:
-                    _ = fetch_text(
-                        url_presetID,
+                    camera_name = camera.get("name") or "unknown"
+                    if not url_areaTemperature:
+                        log.error(
+                            "[%s] Missing url_areaTemperature for a camera entry", name)
+                        continue
+
+                    if url_presetID:
+                        try:
+                            _ = fetch_text(
+                                url_presetID,
+                                timeout_seconds=timeout_seconds or 5.0,
+                                username=username,
+                                password=password,
+                            )
+                            log.info("[%s] Invoked preset via %s",
+                                     name, url_presetID)
+                        except HTTPError as e:
+                            log.error("[%s] Preset HTTP error: %s %s",
+                                      name, e.code, e.reason)
+                            continue
+                        except URLError as e:
+                            log.error("[%s] Preset URL error: %s",
+                                      name, e.reason)
+                            continue
+
+                        # Allow camera to settle before reading temperature
+                        wait_seconds = (
+                            settle_seconds if settle_seconds is not None else 2.0)
+                        if stop_event.wait(wait_seconds):
+                            break
+
+                    data = fetch_text(
+                        url_areaTemperature,
                         timeout_seconds=timeout_seconds or 5.0,
                         username=username,
                         password=password,
                     )
-                    log.info("[%s] Invoked preset via %s", name, url_presetID)
-                except HTTPError as e:
-                    log.error("[%s] Preset HTTP error: %s %s",
-                              name, e.code, e.reason)
-                    if stop_event.wait(interval_seconds):
-                        break
-                    continue
-                except URLError as e:
-                    log.error("[%s] Preset URL error: %s", name, e.reason)
-                    if stop_event.wait(interval_seconds):
-                        break
-                    continue
 
-                # Allow camera to settle before reading temperature
-                wait_seconds = (
-                    settle_seconds if settle_seconds is not None else 6.0)
-                if stop_event.wait(wait_seconds):
-                    break
-
-                data = fetch_text(
-                    url_areaTemperature,
-                    timeout_seconds=timeout_seconds or 5.0,
-                    username=username,
-                    password=password,
-                )
-                url_for_item = url_areaTemperature
-
-            # Legacy single-URL mode
-            elif cameras:
-                for camera in cameras:
-                    url = camera.get("url_areaTemperature")
-                data = fetch_text(
-                    url,
-                    timeout_seconds=timeout_seconds or 5.0,
-                    username=username,
-                    password=password,
-                )
-                url_for_item = url
+                    timestamp = datetime.now().isoformat(timespec="seconds")
+                    out_queue.put(
+                        {
+                            "poller": name,
+                            "camera": camera_name,
+                            "url": url_areaTemperature,
+                            "timestamp": timestamp,
+                            "data": data,
+                        },
+                        block=False,
+                    )
+                    log.info("[%s] Polled data: %s", name, data)
             else:
-                log.error("[%s] No URL configured", name)
+                log.error("[%s] No cameras configured", name)
                 break
-            timestamp = datetime.now().isoformat(timespec="seconds")
-            out_queue.put(
-                {
-                    "poller": name,
-                    "url": url_for_item,
-                    "timestamp": timestamp,
-                    "data": data,
-                },
-                block=False,
-            )
-            log.info("[%s] Polled data: %s", name, data)
         except HTTPError as e:
             log.error("[%s] HTTP error: %s %s", name, e.code, e.reason)
         except URLError as e:

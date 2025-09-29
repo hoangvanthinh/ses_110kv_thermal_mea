@@ -1,6 +1,12 @@
 from typing import TypedDict, Optional, List, Dict, Any
 
 
+class CameraConfig(TypedDict, total=False):
+    name: str
+    url_presetID: str
+    url_areaTemperature: str
+
+
 class PollerConfig(TypedDict, total=False):
     name: str
     # Optional legacy single-URL mode
@@ -8,6 +14,7 @@ class PollerConfig(TypedDict, total=False):
     # Two-step mode
     url_presetID: str
     url_areaTemperature: str
+    cameras: List[CameraConfig]
     username: str
     password: str
     interval_seconds: int
@@ -31,12 +38,14 @@ class AppConfig(TypedDict, total=False):
 
 class QueueItem(TypedDict):
     poller: str
+    camera: str
     url: str
     timestamp: str
     data: str
 
 
 __all__ = [
+    "CameraConfig",
     "PollerConfig",
     "MQTTConfig",
     "AppConfig",

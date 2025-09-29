@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 from utils.types import AppConfig
 
 
@@ -21,6 +21,30 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 "interval_seconds": int(config.get("interval_seconds", 10)),
             }
         ]
+
+    # Normalize pollers: ensure each has a cameras list
+    normalized_pollers: List[Dict[str, Any]] = []
+    for p in config.get("pollers", []) or []:
+        p = dict(p)
+        if "cameras" not in p or not p.get("cameras"):
+            camera: Dict[str, Any] = {}
+            if p.get("url_presetID") or p.get("url_areaTemperature"):
+                if p.get("url_presetID"):
+                    camera["url_presetID"] = p.get("url_presetID")
+                if p.get("url_areaTemperature"):
+                    camera["url_areaTemperature"] = p.get("url_areaTemperature")
+            elif p.get("url"):
+                camera["url_areaTemperature"] = p.get("url")
+            if camera:
+                if p.get("name"):
+                    camera.setdefault("name", str(p.get("name")))
+                p["cameras"] = [camera]
+            # Clean legacy keys to avoid ambiguity
+            p.pop("url", None)
+            p.pop("url_presetID", None)
+            p.pop("url_areaTemperature", None)
+        normalized_pollers.append(p)
+    config["pollers"] = normalized_pollers
 
     config.setdefault(
         "mqtt",
