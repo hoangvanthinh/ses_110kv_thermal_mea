@@ -62,6 +62,11 @@ def poller_worker(
                         username=username,
                         password=password,
                     )
+                    # Parse average temperature from response
+                    for line in data.splitlines():
+                        if line.startswith("aveTemperature="):
+                            data = line.split("=")[1].strip()
+                            break
 
                     timestamp = datetime.now().isoformat(timespec="seconds")
                     out_queue.put(
