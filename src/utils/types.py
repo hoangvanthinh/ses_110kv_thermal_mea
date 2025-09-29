@@ -3,11 +3,16 @@ from typing import TypedDict, Optional, List, Dict, Any
 
 class PollerConfig(TypedDict, total=False):
     name: str
+    # Optional legacy single-URL mode
     url: str
+    # Two-step mode
+    url_presetID: str
+    url_areaTemperature: str
     username: str
     password: str
     interval_seconds: int
     timeout_seconds: float
+    settle_seconds: float
 
 
 class MQTTConfig(TypedDict, total=False):
