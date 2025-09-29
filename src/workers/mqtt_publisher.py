@@ -22,14 +22,14 @@ def mqtt_publisher_worker(
                 continue
             if item is None:
                 break
-            log.info(
-                "[%s] %s/%s -> %s\n%s",
-                item.get("timestamp"),
-                item.get("poller"),
-                item.get("camera") or "unknown",
-                item.get("url"),
-                item.get("data"),
-            )
+            # log.info(
+            #     "[%s] %s/%s -> %s\n%s",
+            #     item.get("timestamp"),
+            #     item.get("poller"),
+            #     item.get("camera") or "unknown",
+            #     item.get("url"),
+            #     item.get("data"),
+            # )
 
     # If MQTT is disabled, just drain to stdout
     mqtt_enabled = bool((settings or {}).get("enabled", False))
