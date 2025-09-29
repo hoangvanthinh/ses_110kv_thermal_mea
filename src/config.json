@@ -28,7 +28,7 @@
     "enabled": true,
     "host": "sems.ses-tech.vn",
     "port": 1883,
-    "topic": "node_thermal/areaTemperature",
+    "topic": "camera",
     "username": "mqtt-test",
     "password": "mqtt-test"
   }

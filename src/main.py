@@ -8,6 +8,7 @@ from config_loader import load_config
 from utils.logging import get_logger
 from workers.http_poller import poller_worker
 from workers.mqtt_publisher import mqtt_publisher_worker
+from workers.mqtt_subscriber import mqtt_subscriber_worker
 
 
 log = get_logger("main")
@@ -52,6 +53,18 @@ def main() -> None:
     )
     mqtt_thread.start()
 
+    # Start subscriber if MQTT is enabled
+    mqtt_enabled = bool(mqtt_cfg.get("enabled", False))
+    mqtt_sub_thread: Optional[threading.Thread] = None
+    if mqtt_enabled:
+        mqtt_sub_thread = threading.Thread(
+            target=mqtt_subscriber_worker,
+            args=(mqtt_cfg, stop_event),
+            daemon=True,
+            name="mqtt-subscriber",
+        )
+        mqtt_sub_thread.start()
+
     log.info(
         "Started %d poller(s). Press Ctrl+C to stop.",
         len(poller_threads),
@@ -60,6 +73,8 @@ def main() -> None:
     try:
         while any(t.is_alive() for t in poller_threads) or (
             mqtt_thread and mqtt_thread.is_alive()
+        ) or (
+            mqtt_sub_thread and mqtt_sub_thread.is_alive()
         ):
             time.sleep(1)
     except KeyboardInterrupt:
@@ -76,6 +91,8 @@ def main() -> None:
 
         if mqtt_thread is not None:
             mqtt_thread.join(timeout=5)
+        if mqtt_sub_thread is not None:
+            mqtt_sub_thread.join(timeout=5)
 
         log.info("Stopped.")
 
