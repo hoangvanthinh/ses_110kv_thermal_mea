@@ -6,7 +6,7 @@ from urllib.error import URLError, HTTPError
 
 
 AREA_TEMPERATURE_URL = (
-    "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+    "http://admin:thinh0702@192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
 )
 
 
@@ -66,5 +66,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
