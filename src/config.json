@@ -16,7 +16,7 @@
       ],
       "username": "admin",
       "password": "thinh0702",
-      "interval_seconds": 15
+      "interval_seconds": 20
     }
   ],
   "mqtt": {

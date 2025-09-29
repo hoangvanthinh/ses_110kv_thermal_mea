@@ -17,7 +17,7 @@ def poller_worker(
     interval_seconds: int,
     out_queue: "queue.Queue[QueueItem]",
     stop_event: threading.Event,
-    cameras: Optional[List[dict]] = None,
+    camerasA: Optional[List[dict]] = None,
     username: Optional[str] = None,
     password: Optional[str] = None,
     timeout_seconds: Optional[float] = None,
@@ -26,8 +26,8 @@ def poller_worker(
     while not stop_event.is_set():
         try:
             # Two-step mode per camera: preset -> wait -> read temperature
-            if cameras:
-                for camera in cameras:
+            if camerasA:
+                for camera in camerasA:
                     url_presetID = camera.get("url_presetID")
                     url_areaTemperature = camera.get("url_areaTemperature")
                     camera_name = camera.get("name") or "unknown"
@@ -57,7 +57,7 @@ def poller_worker(
 
                         # Allow camera to settle before reading temperature
                         wait_seconds = (
-                            settle_seconds if settle_seconds is not None else 2.0)
+                            settle_seconds if settle_seconds is not None else 6.0)
                         if stop_event.wait(wait_seconds):
                             break
 
@@ -80,6 +80,8 @@ def poller_worker(
                         block=False,
                     )
                     log.info("[%s] Polled data: %s", name, data)
+                    if stop_event.wait(wait_seconds):
+                        break
             else:
                 log.error("[%s] No cameras configured", name)
                 break
