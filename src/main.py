@@ -34,20 +34,21 @@ def main() -> None:
     # Start poller threads
     poller_threads: List[threading.Thread] = []
     for p in config.get("pollers", []):
-        if not p.get("url"):
-            continue
         name = str(p.get("name") or f"poller_{len(poller_threads)+1}")
         t = threading.Thread(
             target=poller_worker,
             args=(
                 name,
-                p.get("url"),
                 int(p.get("interval_seconds", 10)),
                 out_queue,
                 stop_event,
+                p.get("url") or None,
+                p.get("url_presetID") or None,
+                p.get("url_areaTemperature") or None,
                 p.get("username") or None,
                 p.get("password") or None,
                 float(p.get("timeout_seconds", 5.0)),
+                float(p.get("settle_seconds", 2.0)),
             ),
             daemon=True,
             name=f"poller:{name}",
