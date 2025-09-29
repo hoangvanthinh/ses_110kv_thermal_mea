@@ -41,7 +41,8 @@ def poller_worker(
                     )
                     log.info("[%s] Invoked preset via %s", name, url_presetID)
                 except HTTPError as e:
-                    log.error("[%s] Preset HTTP error: %s %s", name, e.code, e.reason)
+                    log.error("[%s] Preset HTTP error: %s %s",
+                              name, e.code, e.reason)
                     if stop_event.wait(interval_seconds):
                         break
                     continue
@@ -52,7 +53,8 @@ def poller_worker(
                     continue
 
                 # Allow camera to settle before reading temperature
-                wait_seconds = (settle_seconds if settle_seconds is not None else 2.0)
+                wait_seconds = (
+                    settle_seconds if settle_seconds is not None else 6.0)
                 if stop_event.wait(wait_seconds):
                     break
 
@@ -64,18 +66,18 @@ def poller_worker(
                 )
                 url_for_item = url_areaTemperature
 
-            # Legacy single-URL mode
-            elif url:
-                data = fetch_text(
-                    url,
-                    timeout_seconds=timeout_seconds or 5.0,
-                    username=username,
-                    password=password,
-                )
-                url_for_item = url
-            else:
-                log.error("[%s] No URL configured", name)
-                break
+            # # Legacy single-URL mode
+            # elif url:
+            #     data = fetch_text(
+            #         url,
+            #         timeout_seconds=timeout_seconds or 5.0,
+            #         username=username,
+            #         password=password,
+            #     )
+            #     url_for_item = url
+            # else:
+            #     log.error("[%s] No URL configured", name)
+            #     break
             timestamp = datetime.now().isoformat(timespec="seconds")
             out_queue.put(
                 {
