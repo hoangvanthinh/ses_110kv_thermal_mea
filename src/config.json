@@ -20,12 +20,12 @@
     }
   ],
   "mqtt": {
-    "enabled": false,
-    "host": "localhost",
+    "enabled": true,
+    "host": "sems.ses-tech.vn",
     "port": 1883,
-    "topic": "camera/areaTemperature",
-    "username": "",
-    "password": ""
+    "topic": "node_thermal/areaTemperature",
+    "username": "mqtt-test",
+    "password": "mqtt-test"
   }
 }
 

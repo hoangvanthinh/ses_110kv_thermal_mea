@@ -14,10 +14,7 @@ def mqtt_publisher_worker(
     in_queue: "queue.Queue[dict]",
     stop_event: threading.Event,
 ) -> None:
-    try:
-        import paho.mqtt.client as mqtt  # type: ignore
-    except Exception:
-        log.warning("MQTT library not available. Falling back to stdout.")
+    def drain_to_stdout() -> None:
         while not stop_event.is_set():
             try:
                 item = in_queue.get(timeout=0.5)
@@ -33,6 +30,19 @@ def mqtt_publisher_worker(
                 item.get("url"),
                 item.get("data"),
             )
+
+    # If MQTT is disabled, just drain to stdout
+    mqtt_enabled = bool((settings or {}).get("enabled", False))
+    if not mqtt_enabled:
+        log.info("MQTT disabled. Draining messages to stdout.")
+        drain_to_stdout()
+        return
+
+    try:
+        import paho.mqtt.client as mqtt  # type: ignore
+    except Exception:
+        log.warning("MQTT library not available. Falling back to stdout.")
+        drain_to_stdout()
         return
 
     client = mqtt.Client()
@@ -49,6 +59,8 @@ def mqtt_publisher_worker(
         client.loop_start()
     except Exception as e:
         log.error("Failed to connect to MQTT broker %s:%s: %s", host, port, e)
+        log.info("Falling back to stdout drain mode.")
+        drain_to_stdout()
         return
 
     try:
@@ -60,7 +72,7 @@ def mqtt_publisher_worker(
             if item is None:
                 break
 
-            camera_seg = item.get('camera') or 'unknown'
+            camera_seg = item.get('node_thermal') or 'unknown'
             topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
             payload = json.dumps(item, ensure_ascii=False)
             try:
