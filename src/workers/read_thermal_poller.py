@@ -71,7 +71,8 @@ def poller_worker(
                     timestamp = datetime.now().isoformat(timespec="seconds")
                     out_queue.put(
                         {
-                            "poller": name,
+                            "camera": name,
+                            "type": "temperature",
                             "node_thermal": node_thermal_name,
                             "url": url_areaTemperature,
                             "timestamp": timestamp,
@@ -79,7 +80,7 @@ def poller_worker(
                         },
                         block=False,
                     )
-                    log.info("[%s] Polled data: %s", name, data)
+                    log.info("[%s] Read temperature data: %s", name, data)
             else:
                 log.error("[%s] No node_thermals configured", name)
                 break

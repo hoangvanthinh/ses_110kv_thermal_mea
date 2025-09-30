@@ -25,8 +25,8 @@ def mqtt_publisher_worker(
             log.info(
                 "[%s] %s/%s -> %s\n%s",
                 item.get("timestamp"),
-                item.get("poller"),
-                item.get("camera") or "unknown",
+                item.get("camera"),
+                item.get("node_thermal") or "unknown",
                 item.get("url"),
                 item.get("data"),
             )
@@ -71,10 +71,12 @@ def mqtt_publisher_worker(
                 continue
             if item is None:
                 break
-
-            # camera_seg = item.get('node_thermal') or 'unknown'
-            # topic = f"{base_topic}/{item.get('poller','unknown')}/{camera_seg}"
-            topic = base_topic
+            
+            log.info("Publishing item: %s", item.get('type'))
+            
+            camera_seg = item.get('node_thermal') or 'unknown'
+            topic = f"{base_topic}/{item.get('camera','unknown')}/{camera_seg}"
+            # topic = base_topic
             payload = json.dumps(item, ensure_ascii=False)
             try:
                 client.publish(topic, payload, qos=0, retain=False)
