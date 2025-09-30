@@ -73,15 +73,21 @@ def mqtt_publisher_worker(
                 break
             
             log.info("Publishing item: %s", item.get('type'))
-            
-            camera_seg = item.get('node_thermal') or 'unknown'
-            topic = f"{base_topic}/{item.get('camera','unknown')}/{camera_seg}"
-            # topic = base_topic
-            payload = json.dumps(item, ensure_ascii=False)
-            try:
-                client.publish(topic, payload, qos=0, retain=False)
-            except Exception as e:
-                log.error("MQTT publish error: %s", e)
+
+            if item.get('type') == 'temperature':
+                topic = (settings or {}).get("topic_temperature")
+                payload = json.dumps(item, ensure_ascii=False)
+                try:
+                    client.publish(topic, payload, qos=0, retain=False)
+                except Exception as e:
+                    log.error("MQTT publish error: %s", e)
+            elif item.get('type') == 'rtsp_url':
+                topic = (settings or {}).get("topic_url")
+                payload = json.dumps(item, ensure_ascii=False)
+                try:
+                    client.publish(topic, payload, qos=0, retain=False)
+                except Exception as e:
+                    log.error("MQTT publish error: %s", e)
     finally:
         try:
             client.loop_stop()
