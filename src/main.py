@@ -6,7 +6,7 @@ from typing import List, Optional
 from config_loader import load_config
 
 from utils.logging import get_logger
-from workers.http_poller import poller_worker
+from workers.read_thermal_poller import poller_worker
 from workers.mqtt_publisher import mqtt_publisher_worker
 from workers.mqtt_subscriber import mqtt_subscriber_worker
 from workers.rtsp_fetcher import rtsp_fetcher_worker
@@ -22,9 +22,9 @@ def main() -> None:
     out_queue: "queue.Queue[dict]" = queue.Queue(maxsize=100)
 
     # Start poller threads
-    poller_threads: List[threading.Thread] = []
-    for p in config.get("pollers", []):
-        name = str(p.get("name") or f"poller_{len(poller_threads)+1}")
+    camera_threads: List[threading.Thread] = []
+    for p in config.get("cameras", []):
+        name = str(p.get("name") or f"camera_{len(camera_threads)+1}")
         t = threading.Thread(
             target=poller_worker,
             args=(
@@ -39,10 +39,10 @@ def main() -> None:
                 float(p.get("settle_seconds", 2.0)),
             ),
             daemon=True,
-            name=f"poller:{name}",
+            name=f"camera:{name}",
         )
         t.start()
-        poller_threads.append(t)
+        camera_threads.append(t)
 
     # Start publisher unconditionally; worker will drain to stdout if MQTT disabled
     mqtt_cfg = config.get("mqtt", {}) or {}
@@ -69,7 +69,7 @@ def main() -> None:
 
     # Start RTSP fetcher worker(s) per poller that defines rtsp_endpoint
     rtsp_threads: List[threading.Thread] = []
-    for p in config.get("pollers", []):
+    for p in config.get("cameras", []):
         endpoint = p.get("rtsp_endpoint")
         if not endpoint:
             continue
@@ -84,11 +84,11 @@ def main() -> None:
 
     log.info(
         "Started %d poller(s). Press Ctrl+C to stop.",
-        len(poller_threads),
+        len(camera_threads),
     )
 
     try:
-        while any(t.is_alive() for t in poller_threads) or (
+        while any(t.is_alive() for t in camera_threads) or (
             mqtt_thread and mqtt_thread.is_alive()
         ) or (
             mqtt_sub_thread and mqtt_sub_thread.is_alive()
@@ -103,7 +103,7 @@ def main() -> None:
         except Exception:
             pass
 
-        for t in poller_threads:
+        for t in camera_threads:
             t.join(timeout=5)
 
         if mqtt_thread is not None:

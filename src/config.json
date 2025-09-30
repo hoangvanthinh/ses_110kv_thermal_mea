@@ -1,5 +1,5 @@
 {
-  "pollers": [
+  "cameras": [
     {
       "name": "camera1",
       "node_thermals": [
