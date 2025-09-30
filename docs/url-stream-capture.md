@@ -9,9 +9,9 @@
 - Gateway thực hiện publish URL khi được phía web gửi request get_url.
 
 - Web gửi 1 message request:
- - Topic: camera/<sid>/get_url
+ - Topic: camera/get_url
 - Gateway reply:
- - Topic: camera/<sid>/url
+ - Topic: camera/url
 
 
 ### Payload mẫu
