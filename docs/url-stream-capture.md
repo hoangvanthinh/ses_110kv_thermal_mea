@@ -8,14 +8,8 @@
 - Gateway thực hiện publish URL ngay khi khởi động hoặc khi URL thay đổi.
 - Gateway thực hiện publish URL khi được phía web gửi request get_url.
 
-- Web gửi 1 message request:
- - Topic: camera/get_url
-- Gateway reply:
- - Topic: camera/url
-
-
-### Payload mẫu
- - Request:
+- Web gửi 1 message request vào Topic: camera/get_url
+- Request:
     ```json
     {
     "req_id": "12345",
@@ -23,6 +17,8 @@
     "camera_id": "cam01"
     }
     ```
+
+- Gateway reply vào Topic: camera/url
 - Response:
     ```json
     {
