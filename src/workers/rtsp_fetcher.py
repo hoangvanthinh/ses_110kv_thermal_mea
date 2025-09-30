@@ -11,7 +11,7 @@ log = get_logger("workers.rtsp_fetcher")
 
 
 def rtsp_fetcher_worker(
-    rtsp_endpoint: str,
+    url_get_rtsp_url: str,
     out_queue: "queue.Queue[dict]",
     cmd_queue: "queue.Queue[str]",
     stop_event: threading.Event,
@@ -22,7 +22,7 @@ def rtsp_fetcher_worker(
     def fetch_and_emit() -> None:
         try:
             data = fetch_text(
-                rtsp_endpoint,
+                url_get_rtsp_url,
                 timeout_seconds=5.0,
                 username=username,
                 password=password,
@@ -32,7 +32,7 @@ def rtsp_fetcher_worker(
                 {
                     "type": "rtsp_url",
                     "timestamp": timestamp,
-                    "url": rtsp_endpoint,
+                    "url": url_get_rtsp_url,
                     "rtsp_url": data.strip(),
                 },
                 block=False,
