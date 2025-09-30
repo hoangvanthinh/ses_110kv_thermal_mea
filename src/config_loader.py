@@ -11,8 +11,8 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    if "pollers" not in config:
-        config["pollers"] = [
+    if "cameras" not in config:
+        config["cameras"] = [
             {
                 "name": "default",
                 "url": config.get("url"),
@@ -22,9 +22,9 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
             }
         ]
 
-    # Normalize pollers: ensure each has a cameras list
-    normalized_pollers: List[Dict[str, Any]] = []
-    for p in config.get("pollers", []) or []:
+    # Normalize cameras: ensure each has a cameras list
+    normalized_cameras: List[Dict[str, Any]] = []
+    for p in config.get("cameras", []) or []:
         p = dict(p)
         if "node_thermals" not in p or not p.get("node_thermals"):
             node_thermal: Dict[str, Any] = {}
@@ -32,7 +32,8 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
                 if p.get("url_presetID"):
                     node_thermal["url_presetID"] = p.get("url_presetID")
                 if p.get("url_areaTemperature"):
-                    node_thermal["url_areaTemperature"] = p.get("url_areaTemperature")
+                    node_thermal["url_areaTemperature"] = p.get(
+                        "url_areaTemperature")
             elif p.get("url"):
                 node_thermal["url_areaTemperature"] = p.get("url")
             if node_thermal:
@@ -43,8 +44,8 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
             p.pop("url", None)
             p.pop("url_presetID", None)
             p.pop("url_areaTemperature", None)
-        normalized_pollers.append(p)
-    config["pollers"] = normalized_pollers
+        normalized_cameras.append(p)
+    config["cameras"] = normalized_cameras
 
     config.setdefault(
         "mqtt",
@@ -62,5 +63,3 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
 
 
 __all__ = ["load_config", "DEFAULT_CONFIG_PATH"]
-
-
