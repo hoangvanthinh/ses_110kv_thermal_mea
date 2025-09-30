@@ -24,7 +24,7 @@ def main() -> None:
     # Start poller threads
     camera_threads: List[threading.Thread] = []
     for p in config.get("cameras", []):
-        name = str(p.get("name") or f"poller_{len(camera_threads)+1}")
+        name = str(p.get("name") or f"camera_{len(camera_threads)+1}")
         t = threading.Thread(
             target=poller_worker,
             args=(
@@ -69,7 +69,7 @@ def main() -> None:
 
     # Start RTSP fetcher worker(s) per poller that defines rtsp_endpoint
     rtsp_threads: List[threading.Thread] = []
-    for p in config.get("pollers", []):
+    for p in config.get("cameras", []):
         endpoint = p.get("rtsp_endpoint")
         if not endpoint:
             continue
