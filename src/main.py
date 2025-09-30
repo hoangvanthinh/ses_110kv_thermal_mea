@@ -70,7 +70,7 @@ def main() -> None:
     # Start RTSP fetcher worker(s) per poller that defines rtsp_endpoint
     rtsp_threads: List[threading.Thread] = []
     for p in config.get("cameras", []):
-        endpoint = p.get("rtsp_endpoint")
+        endpoint = p.get("url_get_rtsp_url")
         if not endpoint:
             continue
         t = threading.Thread(
