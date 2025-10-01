@@ -17,7 +17,7 @@ def mqtt_publisher_worker(
     def drain_to_stdout() -> None:
         while not stop_event.is_set():
             try:
-                item = in_queue.get(timeout=0.5)
+                item = None  # in_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
             if item is None:
@@ -71,7 +71,7 @@ def mqtt_publisher_worker(
                 continue
             if item is None:
                 break
-            
+
             log.info("Publishing item: %s", item.get('type'))
 
             if item.get('type') == 'temperature':
@@ -97,5 +97,3 @@ def mqtt_publisher_worker(
 
 
 __all__ = ["mqtt_publisher_worker"]
-
-
