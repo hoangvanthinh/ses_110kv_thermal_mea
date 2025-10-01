@@ -46,7 +46,7 @@ def poller_worker(
                                 password=password,
                             )
                             log.info("[%s] Invoked preset via %s",
-                                     name, url_presetID)
+                                     node_thermal_name, url_presetID)
                         except HTTPError as e:
                             log.error("[%s] Preset HTTP error: %s %s",
                                       name, e.code, e.reason)
@@ -58,7 +58,7 @@ def poller_worker(
 
                         # Allow node_thermal to settle before reading temperature
                         wait_seconds = (
-                            settle_seconds if settle_seconds is not None else 2.0)
+                            settle_seconds if settle_seconds is not None else 5.0)
                         if stop_event.wait(wait_seconds):
                             break
 
@@ -68,13 +68,16 @@ def poller_worker(
                         username=username,
                         password=password,
                     )
+                    log.info(data)
                     # Parse average temperature from response
                     for line in data.splitlines():
+                        # neu khong co ave thi data van bang data ERROR => gay sai, Tai sao thieu data?
                         if line.startswith("aveTemperature="):
                             data = line.split("=")[1].strip()
                             break
 
                     timestamp = datetime.now().isoformat(timespec="seconds")
+
                     out_queue.put(
                         {
                             "camera": name,
@@ -86,7 +89,8 @@ def poller_worker(
                         },
                         block=False,
                     )
-                    log.info("[%s] Read temperature data: %s", name, data)
+                    log.info("[%s] Read temperature data: %s",
+                             node_thermal_name, data)
             else:
                 log.error("[%s] No node_thermals configured", name)
                 break

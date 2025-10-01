@@ -17,11 +17,28 @@
           "name": "node3",
           "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=3",
           "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+        },
+        {
+          "name": "node4",
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=4",
+          "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+        },
+        {
+          "name": "node5",
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=5",
+          "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+        },
+        {
+          "name": "node6",
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=6",
+          "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
         }
       ],
       "username": "admin",
       "password": "thinh0702",
-      "interval_seconds": 10,
+      "interval_seconds": 30,
+      "timeout_seconds": 5,
+      "settle_seconds": 5,
       "url_get_rtsp_url": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1"
     }
   ],
