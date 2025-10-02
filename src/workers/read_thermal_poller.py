@@ -68,7 +68,7 @@ def poller_worker(
                         username=username,
                         password=password,
                     )
-                    log.info(data)
+                    # log.info(data)
                     # Parse average temperature from response
                     for line in data.splitlines():
                         # neu khong co ave thi data van bang data ERROR => gay sai, Tai sao thieu data?
@@ -89,8 +89,8 @@ def poller_worker(
                         },
                         block=False,
                     )
-                    log.info("[%s] Read temperature data: %s",
-                             node_thermal_name, data)
+                    # log.info("[%s] Read temperature data: %s",
+                    #          node_thermal_name, data)
             else:
                 log.error("[%s] No node_thermals configured", name)
                 break
