@@ -1,4 +1,5 @@
 import threading
+import json
 from typing import Dict, Any, List
 
 from utils.logging import get_logger
@@ -11,6 +12,7 @@ def mqtt_subscriber_worker(
     settings: Dict[str, Any],
     stop_event: threading.Event,
     cmd_queue: "queue.Queue[str]" = None,
+    camera_names: List[str] = [],
 ) -> None:
     import queue
     try:
@@ -24,9 +26,11 @@ def mqtt_subscriber_worker(
     host = (settings or {}).get("host", "localhost")
     port = int((settings or {}).get("port", 1883))
     base_topic = (settings or {}).get("topic", "node_thermal/areaTemperature")
-
+    camera_names = (settings or {}).get("camera_names") or camera_names
     # Derive subscription base from the first path segment of base_topic by default
     subscribe_base = (settings or {}).get("subscribe_base") or (base_topic.split("/")[0] if base_topic else "node_thermal")
+    if camera_names:
+        subscribe_base = f"{subscribe_base}/{camera_names}"
     default_topics: List[str] = [
         f"{subscribe_base}/cmd",
         f"{subscribe_base}/get_url",
@@ -54,15 +58,33 @@ def mqtt_subscriber_worker(
         except Exception:
             payload_text = "<binary>"
         topic = msg.topic
+        # Extract camera name from topic path
+        topic_parts = topic.split('/')
+        camera_name = None
+        for name in camera_names:
+            if name in topic_parts:
+                camera_name = name
+                break
+                
+        if camera_name:
+            if cmd_queue is not None:
+                try:
+                    msg_data = {
+                        "camera": camera_name,
+                        "topic": topic,
+                        "payload": payload_text.strip()
+                    }
+                    
+                    if topic.endswith("/get_url") or topic.endswith("/get_url_rtsp"):
+                        msg_data["type"] = "get_url_rtsp"
+                    elif topic.endswith("/cmd"):
+                        msg_data["type"] = "command"
+                        
+                    cmd_queue.put_nowait(json.dumps(msg_data))
+                except queue.Full:
+                    log.error("Command queue is full; dropping command from %s", topic)
         log.info("[MQTT] %s -> %s", topic, payload_text)
-        if cmd_queue is not None:
-            try:
-                if topic.endswith("/get_url") or topic.endswith("/get_url_rtsp"):
-                    cmd_queue.put_nowait("get_url_rtsp")
-                elif topic.endswith("/cmd"):
-                    cmd_queue.put_nowait(payload_text.strip())
-            except queue.Full:
-                log.error("Command queue is full; dropping command from %s", topic)
+
 
     client.on_connect = on_connect
     client.on_message = on_message

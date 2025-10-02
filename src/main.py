@@ -55,11 +55,13 @@ def start_workers(stop_event: threading.Event) -> Tuple[
     mqtt_thread.start()
 
     # --- Start MQTT subscriber (nếu enabled) ---
+    # Get list of camera names for MQTT subscriber filtering
+    camera_names = [str(cam.get("name") or f"camera_{idx}") for idx, cam in enumerate(config.get("cameras", []), start=1)]
     mqtt_sub_thread: Optional[threading.Thread] = None
     if mqtt_cfg.get("enabled", False):
         mqtt_sub_thread = threading.Thread(
             target=mqtt_subscriber_worker,
-            args=(mqtt_cfg, stop_event, cmd_queue),
+            args=(mqtt_cfg, stop_event, cmd_queue, camera_names),
             daemon=True,
             name="mqtt-subscriber",
         )
@@ -73,7 +75,7 @@ def start_workers(stop_event: threading.Event) -> Tuple[
             t = threading.Thread(
                 target=rtsp_fetcher_worker,
                 args=(endpoint, out_queue, cmd_queue, stop_event,
-                      p.get("username"), p.get("password")),
+                      p.get("username"), p.get("password"), p.get("name")),
                 daemon=True,
                 name=f"rtsp-fetcher:{p.get('name') or 'unknown'}",
             )
