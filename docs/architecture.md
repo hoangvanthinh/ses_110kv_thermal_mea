@@ -249,9 +249,269 @@ The application uses a multi-threaded architecture with the following thread typ
 
 ### Thread Communication
 
-- **Queue-based Communication**: Threads communicate via Python `queue.Queue`
-- **Event-based Coordination**: `threading.Event` for graceful shutdown
-- **Thread-safe Data Structures**: All shared data uses thread-safe containers
+The application uses a sophisticated queue-based communication system with two main queues and event-based coordination:
+
+#### Queue Architecture
+
+**1. Output Queue (`out_queue`)**
+- **Type**: `queue.Queue[dict]` with `maxsize=100`
+- **Purpose**: Collects all data from thermal pollers and RTSP fetchers for MQTT publishing
+- **Producers**: 
+  - Thermal Poller threads (temperature data)
+  - RTSP Fetcher threads (RTSP URLs)
+- **Consumer**: MQTT Publisher thread
+- **Data Flow**: Many-to-One (multiple producers → single consumer)
+
+**2. Command Queue (`cmd_queue`)**
+- **Type**: `queue.Queue[str]` with `maxsize=50`
+- **Purpose**: Routes MQTT commands to appropriate workers
+- **Producers**: MQTT Subscriber thread
+- **Consumers**: RTSP Fetcher threads
+- **Data Flow**: One-to-Many (single producer → multiple consumers)
+
+#### Queue Communication Patterns
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ Thermal Poller  │    │ Thermal Poller  │    │ Thermal Poller  │
+│ Thread 1        │    │ Thread 2        │    │ Thread N        │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          │ Temperature Data     │                      │
+          │ (dict)               │                      │
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────▼─────────────┐
+                    │      out_queue            │
+                    │   (maxsize=100)           │
+                    │   queue.Queue[dict]       │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────▼─────────────┐
+                    │   MQTT Publisher Thread   │
+                    │   (Single Consumer)       │
+                    └───────────────────────────┘
+
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│ RTSP Fetcher    │    │ RTSP Fetcher    │    │ RTSP Fetcher    │
+│ Thread 1        │    │ Thread 2        │    │ Thread N        │
+└─────────┬───────┘    └─────────┬───────┘    └─────────┬───────┘
+          │                      │                      │
+          │ RTSP URLs            │                      │
+          │ (dict)               │                      │
+          │                      │                      │
+          └──────────────────────┼──────────────────────┘
+                                 │
+                    ┌─────────────▼─────────────┐
+                    │      out_queue            │
+                    │   (maxsize=100)           │
+                    │   queue.Queue[dict]       │
+                    └─────────────┬─────────────┘
+                                  │
+                    ┌─────────────▼─────────────┐
+                    │   MQTT Publisher Thread   │
+                    │   (Single Consumer)       │
+                    └───────────────────────────┘
+
+┌─────────────────┐
+│ MQTT Subscriber │
+│ Thread          │
+└─────────┬───────┘
+          │
+          │ Commands (JSON strings)
+          │
+          ▼
+┌─────────────────┐
+│   cmd_queue     │
+│  (maxsize=50)   │
+│ queue.Queue[str]│
+└─────────┬───────┘
+          │
+    ┌─────┼─────┐
+    │     │     │
+    ▼     ▼     ▼
+┌─────┐ ┌─────┐ ┌─────┐
+│RTSP │ │RTSP │ │RTSP │
+│Fet.1│ │Fet.2│ │Fet.N│
+└─────┘ └─────┘ └─────┘
+```
+
+#### Queue Operations and Data Structures
+
+**Output Queue Operations:**
+
+1. **Thermal Poller → Output Queue**:
+   ```python
+   out_queue.put({
+       "camera": name,
+       "type": "temperature", 
+       "node_thermal": node_thermal_name,
+       "url": url_areaTemperature,
+       "timestamp": timestamp,
+       "data_t": temperature_value
+   }, block=False)
+   ```
+
+2. **RTSP Fetcher → Output Queue**:
+   ```python
+   out_queue.put({
+       "sid": camera_name,
+       "type": "rtsp_url",
+       "timestamp": timestamp,
+       "rtsp_url": rtsp_url,
+       "status": "ok"
+   }, block=False)
+   ```
+
+3. **MQTT Publisher ← Output Queue**:
+   ```python
+   item = in_queue.get(timeout=0.5)  # Non-blocking with timeout
+   ```
+
+**Command Queue Operations:**
+
+1. **MQTT Subscriber → Command Queue**:
+   ```python
+   cmd_queue.put_nowait(json.dumps({
+       "camera": camera_name,
+       "topic": topic,
+       "payload": payload_text.strip(),
+       "type": "get_url_rtsp"  # or "command"
+   }))
+   ```
+
+2. **RTSP Fetcher ← Command Queue**:
+   ```python
+   cmd = cmd_queue.get_nowait()  # Non-blocking
+   cmd_data = json.loads(cmd)
+   ```
+
+#### Queue Management Features
+
+**1. Bounded Queues with Overflow Protection**:
+- `out_queue`: maxsize=100 (prevents memory overflow from temperature data)
+- `cmd_queue`: maxsize=50 (prevents command queue overflow)
+
+**2. Non-blocking Operations**:
+- `put(block=False)`: Prevents thread blocking on full queues
+- `get_nowait()`: Immediate return, no waiting
+- `get(timeout=0.5)`: Short timeout to allow graceful shutdown
+
+**3. Sentinel Values for Shutdown**:
+```python
+# Shutdown signal to MQTT Publisher
+out_queue.put_nowait(None)  # Sentinel value
+```
+
+**4. Error Handling**:
+- `queue.Full` exceptions handled gracefully
+- `queue.Empty` exceptions handled with continue logic
+- Overflow protection with logging
+
+#### Queue Data Types
+
+**Temperature Data Structure**:
+```python
+{
+    "camera": str,           # Camera identifier
+    "type": "temperature",   # Message type
+    "node_thermal": str,     # Thermal node name
+    "url": str,              # Source URL
+    "timestamp": str,        # ISO timestamp
+    "data_t": str            # Temperature value
+}
+```
+
+**RTSP URL Data Structure**:
+```python
+{
+    "sid": str,              # Camera/session ID
+    "type": "rtsp_url",      # Message type
+    "timestamp": str,        # ISO timestamp
+    "rtsp_url": str,         # RTSP stream URL
+    "status": str            # Status ("ok", "error")
+}
+```
+
+**Command Data Structure**:
+```python
+{
+    "camera": str,           # Target camera
+    "topic": str,            # MQTT topic
+    "payload": str,          # Command payload
+    "type": str              # Command type ("get_url_rtsp", "command")
+}
+```
+
+#### Performance Characteristics
+
+**Queue Throughput**:
+- Output queue: ~100 temperature readings + RTSP URLs
+- Command queue: ~50 pending commands
+- Non-blocking operations prevent thread starvation
+
+**Memory Management**:
+- Bounded queues prevent unbounded memory growth
+- Automatic cleanup on application shutdown
+- Sentinel values ensure clean thread termination
+
+**Thread Safety**:
+- All queue operations are thread-safe
+- No additional locking required
+- Atomic put/get operations
+
+#### UI Queue Communication
+
+**Web UI Data Access**:
+The web interface accesses the output queue for real-time temperature display:
+
+```python
+# UI Timer-based polling (ui_app.py)
+def update_ui():
+    try:
+        data = out_queue.get_nowait()  # Non-blocking read
+        if data.get('type') == 'temperature':
+            text = f'{data["node_thermal"]}: {data["data_t"]} °C at {data["timestamp"]}'
+            temp_label.text = text
+    except Exception:
+        pass  # Ignore queue empty exceptions
+
+ui.timer(0.5, update_ui)  # Poll every 500ms
+```
+
+**UI Queue Characteristics**:
+- **Access Pattern**: Non-blocking reads with `get_nowait()`
+- **Polling Frequency**: 500ms intervals
+- **Data Filtering**: Only processes temperature data
+- **Error Handling**: Graceful handling of empty queue
+- **Thread Safety**: UI runs on main thread, safe queue access
+
+#### Queue Flow Summary
+
+**Complete Data Flow Through Queues**:
+
+1. **Temperature Data Path**:
+   ```
+   Thermal Camera → HTTP API → Thermal Poller → out_queue → MQTT Publisher → MQTT Broker
+                                                      ↓
+                                               Web UI (non-blocking read)
+   ```
+
+2. **RTSP URL Path**:
+   ```
+   MQTT Command → MQTT Subscriber → cmd_queue → RTSP Fetcher → Camera API → out_queue → MQTT Publisher
+   ```
+
+3. **Command Processing Path**:
+   ```
+   External MQTT → MQTT Subscriber → cmd_queue → RTSP Fetcher → Camera API → Response
+   ```
+
+**Queue Load Distribution**:
+- **High Load**: `out_queue` (temperature data from multiple cameras every 30s)
+- **Medium Load**: `cmd_queue` (on-demand RTSP requests)
+- **Low Load**: UI polling (500ms intervals, non-blocking)
 
 ## Configuration
 
