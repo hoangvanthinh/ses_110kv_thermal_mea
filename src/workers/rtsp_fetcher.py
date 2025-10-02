@@ -35,10 +35,11 @@ def rtsp_fetcher_worker(
             timestamp = datetime.now().isoformat(timespec="seconds")
             out_queue.put(
                 {
+                    "sid": camera_name,
                     "type": "rtsp_url",
                     "timestamp": timestamp,
                     "rtsp_url": rtsp_url,
-                    "camera": camera_name,
+                    "status": "ok"
                 },
                 block=False,
             )
