@@ -1,7 +1,7 @@
 {
     "cameras": [
       {
-        "name": "camera1",
+        "name": "0001000100082",
         "node_thermals": [
           {
             "name": "node1",
@@ -44,7 +44,7 @@
     ],
     "mqtt": {
       "enabled": true,
-      "host": "sems.ses-tech.vn",
+      "host": "192.168.1.86",
       "port": 1883,
       "topic": "camera",
       "topic_temperature": "camera/temperature",
