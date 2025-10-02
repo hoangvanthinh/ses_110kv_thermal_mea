@@ -38,7 +38,7 @@ def rtsp_fetcher_worker(
                     "type": "rtsp_url",
                     "timestamp": timestamp,
                     "rtsp_url": rtsp_url,
-                    "camera": camera_name,
+                    "sid": camera_name,
                 },
                 block=False,
             )

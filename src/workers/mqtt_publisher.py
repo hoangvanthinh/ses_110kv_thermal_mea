@@ -82,7 +82,11 @@ def mqtt_publisher_worker(
                 except Exception as e:
                     log.error("MQTT publish error: %s", e)
             elif item.get('type') == 'rtsp_url':
-                topic = (settings or {}).get("topic_url")
+                sid = item.get('sid')
+                if sid:
+                    topic = f"camera/{sid}/url"
+                else:
+                    topic = "camera/url"
                 payload = json.dumps(item, ensure_ascii=False)
                 try:
                     client.publish(topic, payload, qos=0, retain=False)

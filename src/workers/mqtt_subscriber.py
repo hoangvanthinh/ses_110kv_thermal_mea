@@ -25,23 +25,28 @@ def mqtt_subscriber_worker(
     password = (settings or {}).get("password") or None
     host = (settings or {}).get("host", "localhost")
     port = int((settings or {}).get("port", 1883))
-    base_topic = (settings or {}).get("topic", "node_thermal/areaTemperature")
+    base_topic = (settings or {}).get("topic")
     camera_names = (settings or {}).get("camera_names") or camera_names
     # Derive subscription base from the first path segment of base_topic by default
-    subscribe_base = (settings or {}).get("subscribe_base") or (base_topic.split("/")[0] if base_topic else "node_thermal")
+    subscribe_base = (base_topic.split(
+        "/")[0] if base_topic else "camera")
     if camera_names:
-        subscribe_base = f"{subscribe_base}/{camera_names}"
+        # Remove square brackets from camera names
+        cleaned_camera_names = [name.strip("[]'") for name in camera_names]
+        subscribe_base = f"{subscribe_base}/{cleaned_camera_names[0]}"
     default_topics: List[str] = [
         f"{subscribe_base}/cmd",
         f"{subscribe_base}/get_url",
     ]
-    subscribe_topics: List[str] = list((settings or {}).get("subscribe_topics") or default_topics)
+    subscribe_topics: List[str] = list(default_topics)
+    log.info("Subscribe topics: %s", subscribe_topics)
 
     client = mqtt.Client()
     if username and password:
         client.username_pw_set(username, password)
 
-    def on_connect(client_obj, _userdata, _flags, rc):  # type: ignore[no-redef]
+    # type: ignore[no-redef]
+    def on_connect(client_obj, _userdata, _flags, rc):
         if rc == 0:
             for topic in subscribe_topics:
                 try:
@@ -65,7 +70,7 @@ def mqtt_subscriber_worker(
             if name in topic_parts:
                 camera_name = name
                 break
-                
+
         if camera_name:
             if cmd_queue is not None:
                 try:
@@ -74,17 +79,17 @@ def mqtt_subscriber_worker(
                         "topic": topic,
                         "payload": payload_text.strip()
                     }
-                    
+
                     if topic.endswith("/get_url") or topic.endswith("/get_url_rtsp"):
                         msg_data["type"] = "get_url_rtsp"
                     elif topic.endswith("/cmd"):
                         msg_data["type"] = "command"
-                        
+
                     cmd_queue.put_nowait(json.dumps(msg_data))
                 except queue.Full:
-                    log.error("Command queue is full; dropping command from %s", topic)
+                    log.error(
+                        "Command queue is full; dropping command from %s", topic)
         log.info("[MQTT] %s -> %s", topic, payload_text)
-
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -108,5 +113,3 @@ def mqtt_subscriber_worker(
 
 
 __all__ = ["mqtt_subscriber_worker"]
-
-
