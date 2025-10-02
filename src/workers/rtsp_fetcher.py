@@ -30,13 +30,18 @@ def rtsp_fetcher_worker(
                 username=username,
                 password=password,
             )
-            # Parse RTSP URL from response
+            # Parse RTSP URL from response and inject credentials
             rtsp_url = data.strip()
+            if username and password and "://" in rtsp_url:
+                # Insert credentials into URL
+                proto, rest = rtsp_url.split("://", 1)
+                rtsp_url = f"{proto}://{username}:{password}@{rest}"
+            
             timestamp = datetime.now().isoformat(timespec="seconds")
             out_queue.put(
                 {
                     "sid": camera_name,
-                    "type": "rtsp_url",
+                    "type": "rtsp_url", 
                     "timestamp": timestamp,
                     "rtsp_url": rtsp_url,
                     "status": "ok"
