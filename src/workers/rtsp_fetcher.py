@@ -66,10 +66,13 @@ def rtsp_fetcher_worker(
 
         try:
             cmd_data = json.loads(cmd)
-            if cmd_data.get("type") == "get_url_rtsp":
+            
+            # Only process RTSP URL requests for this camera
+            if (cmd_data.get("type") == "get_url_rtsp" and 
+                cmd_data.get("camera") == camera_name):
                 fetch_and_emit()
             else:
-                log.debug("Ignored command: %s", cmd)
+                log.debug("Ignored command for %s: %s", camera_name, cmd)
         except json.JSONDecodeError:
             log.error("Invalid JSON command: %s", cmd)
         except Exception as e:

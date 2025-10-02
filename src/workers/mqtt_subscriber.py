@@ -1,4 +1,5 @@
 import threading
+import queue
 import json
 from typing import Dict, Any, List
 
@@ -11,10 +12,9 @@ log = get_logger("workers.mqtt_subscriber")
 def mqtt_subscriber_worker(
     settings: Dict[str, Any],
     stop_event: threading.Event,
-    cmd_queue: "queue.Queue[str]" = None,
+    cmd_queues: Dict[str, queue.Queue[str]] = None,
     camera_names: List[str] = [],
 ) -> None:
-    import queue
     try:
         import paho.mqtt.client as mqtt  # type: ignore
     except Exception:
@@ -30,16 +30,11 @@ def mqtt_subscriber_worker(
     # Derive subscription base from the first path segment of base_topic by default
     subscribe_base = (base_topic.split(
         "/")[0] if base_topic else "camera")
+
     if camera_names:
-        # Remove square brackets from camera names
-        cleaned_camera_names = [name.strip("[]'") for name in camera_names]
-        subscribe_base = f"{subscribe_base}/{cleaned_camera_names[0]}"
-    default_topics: List[str] = [
-        f"{subscribe_base}/cmd",
-        f"{subscribe_base}/get_url",
-    ]
-    subscribe_topics: List[str] = list(default_topics)
-    log.info("Subscribe topics: %s", subscribe_topics)
+        subscribe_topics = [f"{subscribe_base}/{name}/#" for name in camera_names]
+    else:
+        subscribe_topics = [f"{subscribe_base}/#"]
 
     client = mqtt.Client()
     if username and password:
@@ -72,7 +67,7 @@ def mqtt_subscriber_worker(
                 break
 
         if camera_name:
-            if cmd_queue is not None:
+            if cmd_queues is not None:
                 try:
                     msg_data = {
                         "camera": camera_name,
@@ -80,15 +75,24 @@ def mqtt_subscriber_worker(
                         "payload": payload_text.strip()
                     }
 
+                    # Route commands to appropriate queues based on topic
                     if topic.endswith("/get_url") or topic.endswith("/get_url_rtsp"):
                         msg_data["type"] = "get_url_rtsp"
-                    elif topic.endswith("/cmd"):
-                        msg_data["type"] = "command"
-
-                    cmd_queue.put_nowait(json.dumps(msg_data))
-                except queue.Full:
-                    log.error(
-                        "Command queue is full; dropping command from %s", topic)
+                        if "rtsp" in cmd_queues:
+                            cmd_queues["rtsp"].put_nowait(json.dumps(msg_data))
+                            
+                    elif topic.endswith("/ptz_preset"):
+                        msg_data["type"] = "ptz_preset"
+                        if "ptz" in cmd_queues:
+                            cmd_queues["ptz"].put_nowait(json.dumps(msg_data))
+                            
+                    elif topic.endswith("/ptz_move"):
+                        msg_data["type"] = "ptz_move"
+                        if "ptz" in cmd_queues:
+                            cmd_queues["ptz"].put_nowait(json.dumps(msg_data))
+                                            
+                except Exception as e:
+                    log.error("Error routing command from %s: %s", topic, e)
         log.info("[MQTT] %s -> %s", topic, payload_text)
 
     client.on_connect = on_connect
