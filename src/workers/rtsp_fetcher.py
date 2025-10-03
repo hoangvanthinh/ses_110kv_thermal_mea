@@ -10,55 +10,56 @@ from utils.logging import get_logger
 
 log = get_logger("workers.rtsp_fetcher")
 
-
 def rtsp_fetcher_worker(
-    url_get_rtsp_url: str,
     out_queue: "queue.Queue[dict]",
     cmd_queue: "queue.Queue[str]",
     stop_event: threading.Event,
-    username: Optional[str] = None,
-    password: Optional[str] = None,
-    camera_name: Optional[str] = None,
-    poll_interval_seconds: float = 0.5,
 ) -> None:
-    def fetch_and_emit() -> None:
+    """
+    Worker to fetch RTSP URLs for cameras on demand via commands from cmd_queue.
+    Expects commands as JSON strings with at least 'camera', 'type', etc.
+    """
+    import time
+
+    from config_loader import load_config
+
+    config = load_config()
+    cameras = config.get("cameras", [])
+
+    # Build a lookup for camera config by name
+    camera_lookup = {str(cam.get("name")): cam for cam in cameras if cam.get("name")}
+
+    def fetch_and_emit(camera_name: str, username: str, password: str, url_get_rtsp_url: str) -> None:
         try:
-            # CGI for get RTSP URL from camera
             data = fetch_text(
                 url_get_rtsp_url,
                 timeout_seconds=5.0,
                 username=username,
                 password=password,
             )
-            # Parse RTSP URL from response and inject credentials
             rtsp_url = data.strip()
             if username and password and "://" in rtsp_url:
-                # Insert credentials into URL
                 proto, rest = rtsp_url.split("://", 1)
                 rtsp_url = f"{proto}://{username}:{password}@{rest}"
-            
+
             timestamp = datetime.now().isoformat(timespec="seconds")
             out_queue.put(
                 {
                     "sid": camera_name,
-                    "type": "rtsp_url", 
+                    "type": "rtsp_url",
                     "timestamp": timestamp,
                     "rtsp_url": rtsp_url,
                     "status": "ok"
                 },
                 block=False,
             )
-            log.info("Fetched RTSP URL: %s", rtsp_url)
+            log.info("Fetched RTSP URL for %s: %s", camera_name, rtsp_url)
         except (HTTPError, URLError) as e:
-            log.error("RTSP fetch error: %s", getattr(e, "reason", e))
+            log.error("RTSP fetch error for %s: %s", camera_name, getattr(e, "reason", e))
         except Exception as e:
-            log.exception("Unexpected error while fetching RTSP URL: %s", e)
+            log.exception("Unexpected error while fetching RTSP URL for %s: %s", camera_name, e)
 
-    # Fetch once at startup
-    # fetch_and_emit()
-
-    # Process commands
-    while not stop_event.wait(poll_interval_seconds):
+    while not stop_event.wait(0.5):
         try:
             cmd = cmd_queue.get_nowait()
         except queue.Empty:
@@ -66,17 +67,27 @@ def rtsp_fetcher_worker(
 
         try:
             cmd_data = json.loads(cmd)
-            
-            # Only process RTSP URL requests for this camera
-            if (cmd_data.get("type") == "get_url_rtsp" and 
-                cmd_data.get("camera") == camera_name):
-                fetch_and_emit()
-            else:
-                log.debug("Ignored command for %s: %s", camera_name, cmd)
-        except json.JSONDecodeError:
-            log.error("Invalid JSON command: %s", cmd)
+            camera_name = cmd_data.get("camera")
+            if not camera_name:
+                log.warning("RTSP fetcher: missing camera name in command: %s", cmd)
+                continue
+
+            cam_cfg = camera_lookup.get(str(camera_name))
+            if not cam_cfg:
+                log.warning("RTSP fetcher: unknown camera '%s'", camera_name)
+                continue
+
+            username = cam_cfg.get("username")
+            password = cam_cfg.get("password")
+            url_get_rtsp_url = cam_cfg.get("url_get_rtsp_url")
+            if not url_get_rtsp_url:
+                log.warning("RTSP fetcher: missing url_get_rtsp_url for camera '%s'", camera_name)
+                continue
+
+            fetch_and_emit(camera_name, username, password, url_get_rtsp_url)
         except Exception as e:
-            log.error("Error processing command: %s - %s", cmd, e)
+            log.error("RTSP fetcher: error processing command: %s", e)
+
 
 
 __all__ = ["rtsp_fetcher_worker"]

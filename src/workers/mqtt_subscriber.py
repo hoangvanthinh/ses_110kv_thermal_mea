@@ -35,6 +35,8 @@ def mqtt_subscriber_worker(
         subscribe_topics = [f"{subscribe_base}/{name}/#" for name in camera_names]
     else:
         subscribe_topics = [f"{subscribe_base}/#"]
+    
+    log.info("Subscribe topics: %s", subscribe_topics)
 
     client = mqtt.Client()
     if username and password:
@@ -90,7 +92,23 @@ def mqtt_subscriber_worker(
                         msg_data["type"] = "ptz_move"
                         if "ptz" in cmd_queues:
                             cmd_queues["ptz"].put_nowait(json.dumps(msg_data))
-                                            
+                            
+                    elif topic.endswith("/get_temperature"):
+                        msg_data["type"] = "get_temperature"
+                        if "thermal" in cmd_queues:
+                            cmd_queues["thermal"].put_nowait(json.dumps(msg_data))
+                            
+                    elif topic.endswith("/cmd"):
+                        msg_data["type"] = "command"
+                        # Broadcast to all queues for general commands
+                        for queue_name, cmd_queue in cmd_queues.items():
+                            try:
+                                cmd_queue.put_nowait(json.dumps(msg_data))
+                            except queue.Full:
+                                log.error(
+                                    "Command queue %s is full; dropping command from %s", 
+                                    queue_name, topic)
+                                    
                 except Exception as e:
                     log.error("Error routing command from %s: %s", topic, e)
         log.info("[MQTT] %s -> %s", topic, payload_text)

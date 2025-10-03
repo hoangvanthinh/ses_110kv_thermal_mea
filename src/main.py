@@ -15,7 +15,7 @@ log = get_logger("main")
 
 
 def start_workers(stop_event: threading.Event) -> Tuple[
-    List[threading.Thread], threading.Thread, Optional[threading.Thread], List[threading.Thread], List[threading.Thread], "queue.Queue[dict]"
+    List[threading.Thread], threading.Thread, Optional[threading.Thread], threading.Thread, List[threading.Thread], "queue.Queue[dict]"
 ]:
     """Khởi động các worker (poller, MQTT, RTSP fetcher, PTZ controller)."""
     config = load_config()
@@ -24,10 +24,12 @@ def start_workers(stop_event: threading.Event) -> Tuple[
     # Create separate command queues for different consumers
     rtsp_cmd_queue: "queue.Queue[str]" = queue.Queue(maxsize=50)
     ptz_cmd_queue: "queue.Queue[str]" = queue.Queue(maxsize=50)
+    thermal_cmd_queue: "queue.Queue[str]" = queue.Queue(maxsize=50)
     
     cmd_queues = {
         "rtsp": rtsp_cmd_queue,
         "ptz": ptz_cmd_queue,
+        "thermal": thermal_cmd_queue,
     }
 
     # --- Start poller threads ---
@@ -65,7 +67,6 @@ def start_workers(stop_event: threading.Event) -> Tuple[
 
     # --- Start MQTT subscriber (nếu enabled) ---
     mqtt_sub_thread: Optional[threading.Thread] = None
-
     if mqtt_cfg.get("enabled", False):
         mqtt_sub_thread = threading.Thread(
             target=mqtt_subscriber_worker,
@@ -76,19 +77,14 @@ def start_workers(stop_event: threading.Event) -> Tuple[
         mqtt_sub_thread.start()
 
     # --- Start RTSP fetchers ---
-    rtsp_threads: List[threading.Thread] = []
-    for p in config.get("cameras", []):
-        endpoint = p.get("url_get_rtsp_url")
-        if endpoint:
-            t = threading.Thread(
+    rtsp_threads = threading.Thread(
                 target=rtsp_fetcher_worker,
-                args=(endpoint, out_queue, rtsp_cmd_queue, stop_event,
-                      p.get("username"), p.get("password"), p.get("name")),
+                args=(out_queue, rtsp_cmd_queue, stop_event),
                 daemon=True,
-                name=f"rtsp-fetcher:{p.get('name') or 'unknown'}",
+                name="rtsp-fetcher",
             )
-            t.start()
-            rtsp_threads.append(t)
+    rtsp_threads.start()
+         
     
     # --- Start PTZ controllers ---
     ptz_threads: List[threading.Thread] = []
@@ -104,8 +100,8 @@ def start_workers(stop_event: threading.Event) -> Tuple[
             t.start()
             ptz_threads.append(t)
 
-    log.info("Started %d poller(s), %d RTSP fetcher(s), %d PTZ controller(s), mqtt=%s", 
-             len(camera_threads), len(rtsp_threads), len(ptz_threads), mqtt_cfg.get("enabled", False))
+    log.info("Started %d poller(s), 1 RTSP fetcher, %d PTZ controller(s), mqtt=%s", 
+             len(camera_threads), len(ptz_threads), mqtt_cfg.get("enabled", False))
     return camera_threads, mqtt_thread, mqtt_sub_thread, rtsp_threads, ptz_threads, out_queue
 
 
@@ -113,7 +109,7 @@ def stop_workers(
     camera_threads: List[threading.Thread],
     mqtt_thread: Optional[threading.Thread],
     mqtt_sub_thread: Optional[threading.Thread],
-    rtsp_threads: List[threading.Thread],
+    rtsp_thread: threading.Thread,
     ptz_threads: List[threading.Thread],
     out_queue: "queue.Queue[dict]",
     stop_event: threading.Event,
@@ -132,8 +128,7 @@ def stop_workers(
         mqtt_thread.join(timeout=5)
     if mqtt_sub_thread:
         mqtt_sub_thread.join(timeout=5)
-    for t in rtsp_threads:
-        t.join(timeout=5)
+    rtsp_thread.join(timeout=5)
     for t in ptz_threads:
         t.join(timeout=5)
     log.info("Stopped workers.")
@@ -154,7 +149,7 @@ def build_ui():
 def main():
     stop_event = threading.Event()
     # workers = start_workers(stop_event)
-    camera_threads, mqtt_thread, mqtt_sub_thread, rtsp_threads, ptz_threads, out_queue = start_workers(
+    camera_threads, mqtt_thread, mqtt_sub_thread, rtsp_thread, ptz_threads, out_queue = start_workers(
         stop_event)
 
     # UI
@@ -166,7 +161,7 @@ def main():
     def _cleanup():
         # stop_workers(*workers, stop_event)
         stop_workers(camera_threads, mqtt_thread, mqtt_sub_thread,
-                     rtsp_threads, ptz_threads, out_queue, stop_event)
+                     rtsp_thread, ptz_threads, out_queue, stop_event)
 
     # Run app
     ui.run(port=8080, reload=False, storage_secret='super-secret-key')
