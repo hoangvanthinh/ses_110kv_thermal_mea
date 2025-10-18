@@ -1,7 +1,7 @@
 {
     "cameras": [
       {
-        "name": "0001000100082",
+        "camera_name": "0001000100082",
         "node_thermals": [
           {
             "name": "node1",

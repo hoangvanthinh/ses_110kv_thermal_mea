@@ -14,7 +14,7 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     if "cameras" not in config:
         config["cameras"] = [
             {
-                "name": "default",
+                "camera_name": "default",
                 "url": config.get("url"),
                 "username": config.get("username"),
                 "password": config.get("password"),
@@ -26,20 +26,20 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     normalized_cameras: List[Dict[str, Any]] = []
     for p in config.get("cameras", []) or []:
         p = dict(p)
-        if "node_thermals" not in p or not p.get("node_thermals"):
-            node_thermal: Dict[str, Any] = {}
+        if "presets" not in p or not p.get("presets"):
+            preset: Dict[str, Any] = {}
             if p.get("url_presetID") or p.get("url_areaTemperature"):
                 if p.get("url_presetID"):
-                    node_thermal["url_presetID"] = p.get("url_presetID")
+                    preset["url_presetID"] = p.get("url_presetID")
                 if p.get("url_areaTemperature"):
-                    node_thermal["url_areaTemperature"] = p.get(
+                    preset["url_areaTemperature"] = p.get(
                         "url_areaTemperature")
             elif p.get("url"):
-                node_thermal["url_areaTemperature"] = p.get("url")
-            if node_thermal:
+                preset["url_areaTemperature"] = p.get("url")
+            if preset:
                 if p.get("name"):
-                    node_thermal.setdefault("name", str(p.get("name")))
-                p["node_thermals"] = [node_thermal]
+                    preset.setdefault("name", str(p.get("name")))
+                p["presets"] = [preset]
             # Clean legacy keys to avoid ambiguity
             p.pop("url", None)
             p.pop("url_presetID", None)

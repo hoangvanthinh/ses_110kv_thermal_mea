@@ -35,7 +35,7 @@ def start_workers(stop_event: threading.Event) -> Tuple[
     # --- Start poller threads ---
     camera_threads: List[threading.Thread] = []
     for idx, p in enumerate(config.get("cameras", []), start=1):
-        name = str(p.get("name") or f"camera_{idx}")
+        name = str(p.get("camera_name") or f"camera_{idx}")
         t = threading.Thread(
             target=poller_worker,
             args=(
@@ -70,7 +70,7 @@ def start_workers(stop_event: threading.Event) -> Tuple[
     if mqtt_cfg.get("enabled", False):
         mqtt_sub_thread = threading.Thread(
             target=mqtt_subscriber_worker,
-            args=(mqtt_cfg, stop_event, cmd_queues, [p.get("name") for p in config.get("cameras", []) if p.get("name")]),
+            args=(mqtt_cfg, stop_event, cmd_queues, [p.get("camera_name") for p in config.get("cameras", []) if p.get("camera_name")]),
             daemon=True,
             name="mqtt-subscriber",
         )
@@ -89,7 +89,7 @@ def start_workers(stop_event: threading.Event) -> Tuple[
     # --- Start PTZ controllers ---
     ptz_threads: List[threading.Thread] = []
     for p in config.get("cameras", []):
-        name = p.get("name")
+        name = p.get("camera_name")
         if name:
             t = threading.Thread(
                 target=ptz_controller_worker,
