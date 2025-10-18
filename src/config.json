@@ -39,23 +39,8 @@
         "interval_seconds": 30,
         "timeout_seconds": 5,
         "settle_seconds": 5,
-        "url_get_rtsp_url": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1"
-      },
-      {
-        "name": "0001000100083",
-        "node_thermals": [
-          {
-            "name": "node1",
-            "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
-            "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
-          }
-        ],
-        "username": "admin",
-        "password": "thinh0702",
-        "interval_seconds": 30,
-        "timeout_seconds": 5,
-        "settle_seconds": 5,
-        "url_get_rtsp_url": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1"
+        "url_get_rtsp_url": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1",
+        "url_snapshot": "http://192.168.1.171/cgi-bin/snapshot.cgi?cameraID=1&areaID=1"
       }
     ],
     "mqtt": {
@@ -63,7 +48,7 @@
       "host": "192.168.1.86",
       "port": 1883,
       "topic": "camera",
-      "topic_temperature": "camera/temperature",
+      "topic_temperature": "S3M_TOPIC_DATA",
       "topic_req_url": "camera/get_url",
       "topic_url": "camera/url",
       "username": "mqtt-test",

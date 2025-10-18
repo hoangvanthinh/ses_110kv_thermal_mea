@@ -1,5 +1,6 @@
 import threading
 import queue
+import os
 from datetime import datetime
 from typing import Optional, List
 import time
@@ -36,7 +37,8 @@ def poller_worker(
                         log.error(
                             "[%s] Missing url_areaTemperature for a node_thermal entry", name)
                         continue
-
+                    url_snapshot = node_thermal.get("url_snapshot")
+                    # 1. Invoke preset
                     if url_presetID:
                         try:
                             _ = fetch_text(
@@ -61,7 +63,7 @@ def poller_worker(
                             settle_seconds if settle_seconds is not None else 5.0)
                         if stop_event.wait(wait_seconds):
                             break
-
+                    # 2. Read temperature
                     data = fetch_text(
                         url_areaTemperature,
                         timeout_seconds=timeout_seconds or 5.0,
@@ -75,17 +77,31 @@ def poller_worker(
                         if line.startswith("aveTemperature="):
                             data = line.split("=")[1].strip()
                             break
+                    # 3. Take snapshot
+                    # if url_snapshot:
+                    #     save_dir = "D:/FTPserver"
+                    #     save_file = os.path.join(save_dir, f"{node_thermal_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.jpg")
+                    #     image_url = os.path.join(save_dir, f"{node_thermal_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.jpg")
+                    #     snapshot_data = fetch_text(
+                    #         url_snapshot,
+                    #         timeout_seconds=timeout_seconds or 5.0,
+                    #         username=username,
+                    #         password=password,
+                    #     )
+                    #     if snapshot_data:
+                    #         image_url = snapshot_data
 
-                    timestamp = datetime.now().isoformat(timespec="seconds")
-
+                   
+                    # 4. Publish temperature data
                     out_queue.put(
                         {
                             "camera": name,
                             "type": "temperature",
                             "node_thermal": node_thermal_name,
                             "url": url_areaTemperature,
-                            "timestamp": timestamp,
-                            "data_t": data,
+                            "timestamp": datetime.now().isoformat(timespec="seconds"),
+                            "data_t": data
+                            # "image_url": image_url
                         },
                         block=False,
                     )
