@@ -122,7 +122,7 @@ def _process_node_thermal(
     Returns:
         True if should continue, False if should stop
     """
-    node_name = node_thermal.get("name", "unknown")
+    node_name = node_thermal.get("preset_name", "unknown")
     url_preset = node_thermal.get("url_presetID")
     url_temperature = node_thermal.get("url_areaTemperature")
     
