@@ -83,6 +83,8 @@ class WorkerManager:
                     camera_cfg.get("password"),
                     float(camera_cfg.get("timeout_seconds", 10.0)),
                     float(camera_cfg.get("settle_seconds", 2.0)),
+                    camera_cfg.get("url_snapshot"),
+                    camera_cfg.get("img_server_host"),
                 ),
                 daemon=True,
                 name=f"camera:{camera_name}",

@@ -1,4 +1,5 @@
 """Thermal camera polling worker."""
+import os
 import threading
 import queue
 from datetime import datetime
@@ -55,6 +56,8 @@ class ThermalPollerConfig:
         settle_seconds: float = 5.0,
         username: Optional[str] = None,
         password: Optional[str] = None,
+        url_snapshot: Optional[str] = None,
+        img_server_host: Optional[str] = None,
     ):
         self.name = name
         self.interval_seconds = interval_seconds
@@ -62,6 +65,8 @@ class ThermalPollerConfig:
         self.settle_seconds = settle_seconds
         self.username = username
         self.password = password
+        self.url_snapshot = url_snapshot
+        self.img_server_host = img_server_host
 
 
 def _parse_thermal_preset_from_config(preset_config: Dict[str, Any]) -> ThermalPreset:
@@ -212,6 +217,75 @@ def _publish_temperature_data(
             data.sid
         )
 
+
+def _capture_snapshot(
+    snapshot_url: str,
+    timeout_seconds: float,
+    username: Optional[str],
+    password: Optional[str],
+    camera_name: str,
+) -> Optional[bytes]:
+    """
+    Capture snapshot image from camera.
+    
+    Args:
+        snapshot_url: URL to capture snapshot
+        timeout_seconds: Request timeout
+        username: Optional authentication username
+        password: Optional authentication password
+        camera_name: Name of camera for logging
+        
+    Returns:
+        Snapshot image bytes, or None if failed
+    """
+    try:
+        from utils.http import fetch_binary
+        snapshot_bytes = fetch_binary(
+            snapshot_url,
+            timeout_seconds=timeout_seconds,
+            username=username,
+            password=password,
+        )
+        log.info("[%s] Snapshot captured from %s", camera_name, snapshot_url)
+        return snapshot_bytes
+    except Exception as e:
+        log.error("[%s] Snapshot capture failed: %s", camera_name, e)
+        return None
+
+
+def _save_snapshot_to_img_server(
+    snapshot_bytes: bytes,
+    camera_name: str,
+    preset_name: str,
+    server_save_dir: str = "/FTPserver",
+) -> Optional[str]:
+    """
+    Save snapshot image to img_server directory.
+    
+    Args:
+        snapshot_bytes: Image data in bytes
+        camera_name: Name of camera
+        preset_name: Name of preset
+        server_save_dir: Directory path to save images (default: /FTPserver)
+        
+    Returns:
+        Local file path if saved successfully, None if failed
+    """
+    try:
+        # Create unique filename with timestamp
+        fname = f"{camera_name}_{preset_name}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}.jpg"
+        os.makedirs(server_save_dir, exist_ok=True)
+        local_file_path = os.path.join(server_save_dir, fname)
+        
+        with open(local_file_path, "wb") as f:
+            f.write(snapshot_bytes)
+        
+        log.info("[%s] Snapshot saved to %s", camera_name, local_file_path)
+        return local_file_path
+    except Exception as e:
+        log.error("[%s] Failed to save snapshot: %s", camera_name, e)
+        return None
+
 def _process_thermal_nodes(
     preset: ThermalPreset,
     camera_name: str,
@@ -224,43 +298,33 @@ def _process_thermal_nodes(
         log.error("[%s] No nodes configured in preset '%s'", camera_name, preset.name)
         return True
 
-    # Chụp ảnh snapshot bằng url_snapshot, sau đó lưu về 192.168.1.163
+    # Capture snapshot and save to img_server
+    img_url_on_server = ""
 
-    # Giả sử preset có thể chứa một trường temperature_url hoặc preset_url cần thiết
-    # url_snapshot được giả định đã nằm trong cấu hình camera (access từ config cho _process_thermal_nodes)
-    # Tuy nhiên, tại đây, hàm chỉ nhận object preset & camera_name & config, không có thẳng url_snapshot.
-    # Ta tạm giả định url_snapshot là một thuộc tính của config (sẽ override ở caller).
-    snapshot_url = "http://192.168.1.171/cgi-bin/image.cgi?cameraID=1&quality=5" #getattr(config, "url_snapshot", None)
-    img_server_host = "192.168.1.163"
-    img_url_on_server = None
-
-    if snapshot_url:
-        try:
-            # Fetch ảnh (dạng bytes)
-            from utils.http import fetch_binary
-            snapshot_bytes = fetch_binary(
-                snapshot_url,
-                timeout_seconds=config.timeout_seconds,
-                username=config.username,
-                password=config.password,
+    if config.url_snapshot:
+        # Step 1: Capture snapshot from camera
+        snapshot_bytes = _capture_snapshot(
+            config.url_snapshot,
+            config.timeout_seconds,
+            config.username,
+            config.password,
+            camera_name,
+        )
+        
+        # Step 2: Save snapshot to img_server
+        if snapshot_bytes:
+            local_file_path = _save_snapshot_to_img_server(
+                snapshot_bytes,
+                camera_name,
+                preset.name,
+                server_save_dir="/FTPserver",
             )
-            import os
-
-            # Tạo tên file duy nhất với timestamp và camera_name/preset để tránh ghi đè
-            fname = f"{camera_name}_{preset.name}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}.jpg"
-            server_save_dir = "/FTPserver"
-            os.makedirs(server_save_dir, exist_ok=True)
-            local_file_path = os.path.join(server_save_dir, fname)
-            with open(local_file_path, "wb") as f:
-                f.write(snapshot_bytes)
-
-            # Tạo URL để sử dụng khi publish (giả sử server đã phục vụ qua HTTP tại /snapshots/)
-            img_url_on_server = f"http://{img_server_host}/{fname}"
-
-        except Exception as e:
-            log.error("[%s] Snapshot capture failed: %s", camera_name, e)
-            img_url_on_server = ""
-
+            
+            if local_file_path and config.img_server_host:
+                fname = os.path.basename(local_file_path)
+                img_url_on_server = f"http://{config.img_server_host}/{fname}"
+    
+    # Read temperature from camera and publish to output queue
     for node in preset.nodes:
         if stop_event.is_set():
             return False
@@ -304,6 +368,8 @@ def _process_node_thermal(
     password: Optional[str],
     timeout_seconds: float,
     settle_seconds: float,
+    url_snapshot: Optional[str] = None,
+    img_server_host: Optional[str] = None,
 ) -> bool:
     """
     Process a single thermal node: invoke preset, wait, read temperature.
@@ -330,6 +396,8 @@ def _process_node_thermal(
         settle_seconds=settle_seconds,
         username=username,
         password=password,
+        url_snapshot=url_snapshot,
+        img_server_host=img_server_host,
     )
     
     # Step 1: Invoke preset if configured
@@ -385,6 +453,8 @@ def poller_worker(
     password: Optional[str] = None,
     timeout_seconds: Optional[float] = None,
     settle_seconds: Optional[float] = None,
+    url_snapshot: Optional[str] = None,
+    img_server_host: Optional[str] = None,
 ) -> None:
     """
     Thermal camera polling worker.
@@ -401,6 +471,8 @@ def poller_worker(
         password: Optional authentication password
         timeout_seconds: HTTP request timeout (default: 5.0)
         settle_seconds: Time to wait after preset invocation (default: 5.0)
+        url_snapshot: Optional URL to capture snapshot images
+        img_server_host: Optional hostname/IP of image server
     """
     if not preset_thermals:
         log.error("[%s] No preset_thermals configured", name)
@@ -434,6 +506,8 @@ def poller_worker(
                     password,
                     timeout,
                     settle_time,
+                    url_snapshot,
+                    img_server_host,
                 )
                 
                 if not should_continue:
