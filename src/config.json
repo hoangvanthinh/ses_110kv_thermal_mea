@@ -66,7 +66,7 @@
         "timeout_seconds": 5,
         "settle_seconds": 5,
         "url_get_rtsp_url": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1",
-        "url_snapshot": "http://192.168.1.171/cgi-bin/snapshot.cgi?cameraID=1&areaID=1"
+        "url_snapshot": "http://192.168.1.171/cgi-bin/image.cgi?cameraID=1&quality=5"
       }
     ],
     "mqtt": {

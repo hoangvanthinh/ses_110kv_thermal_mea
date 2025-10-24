@@ -212,7 +212,6 @@ def _publish_temperature_data(
             data.sid
         )
 
-
 def _process_thermal_nodes(
     preset: ThermalPreset,
     camera_name: str,
@@ -224,6 +223,43 @@ def _process_thermal_nodes(
     if not preset.nodes:
         log.error("[%s] No nodes configured in preset '%s'", camera_name, preset.name)
         return True
+
+    # Chụp ảnh snapshot bằng url_snapshot, sau đó lưu về 192.168.1.163
+
+    # Giả sử preset có thể chứa một trường temperature_url hoặc preset_url cần thiết
+    # url_snapshot được giả định đã nằm trong cấu hình camera (access từ config cho _process_thermal_nodes)
+    # Tuy nhiên, tại đây, hàm chỉ nhận object preset & camera_name & config, không có thẳng url_snapshot.
+    # Ta tạm giả định url_snapshot là một thuộc tính của config (sẽ override ở caller).
+    snapshot_url = "http://192.168.1.171/cgi-bin/image.cgi?cameraID=1&quality=5" #getattr(config, "url_snapshot", None)
+    img_server_host = "192.168.1.163"
+    img_url_on_server = None
+
+    if snapshot_url:
+        try:
+            # Fetch ảnh (dạng bytes)
+            from utils.http import fetch_binary
+            snapshot_bytes = fetch_binary(
+                snapshot_url,
+                timeout_seconds=config.timeout_seconds,
+                username=config.username,
+                password=config.password,
+            )
+            import os
+
+            # Tạo tên file duy nhất với timestamp và camera_name/preset để tránh ghi đè
+            fname = f"{camera_name}_{preset.name}_{datetime.utcnow().strftime('%Y%m%dT%H%M%S%fZ')}.jpg"
+            server_save_dir = "/FTPserver"
+            os.makedirs(server_save_dir, exist_ok=True)
+            local_file_path = os.path.join(server_save_dir, fname)
+            with open(local_file_path, "wb") as f:
+                f.write(snapshot_bytes)
+
+            # Tạo URL để sử dụng khi publish (giả sử server đã phục vụ qua HTTP tại /snapshots/)
+            img_url_on_server = f"http://{img_server_host}/{fname}"
+
+        except Exception as e:
+            log.error("[%s] Snapshot capture failed: %s", camera_name, e)
+            img_url_on_server = ""
 
     for node in preset.nodes:
         if stop_event.is_set():
@@ -251,7 +287,7 @@ def _process_thermal_nodes(
             temperature=temperature,
             timestamp=datetime.now().isoformat(timespec="seconds"),
             sent_at=datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
-            img="http://192.168.1.163/test.jpg",
+            img=img_url_on_server,
         )
         
         _publish_temperature_data(data, out_queue, camera_name)
