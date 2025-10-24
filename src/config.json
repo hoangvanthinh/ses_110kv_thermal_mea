@@ -1,27 +1,17 @@
 {
     "cameras": [
       {
-        "camera_name": "0001000100082",
+        "camera_name": "000100010008",
         "preset_thermals": [
           {
             "preset_name": "KV1",
             "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
-            "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
             "nodes": [
               {
                 "ID_node": 0,
-                "SID": "SID_1_1",
-                "name_node": "Node 1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "SID_1_2",
-                "name_node": "Node 2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "SID_1_3",
-                "name_node": "Node 3"
+                "SID": "0001000100080",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
+                "name_node": "Node KV1.1"
               }
             ]
           },
@@ -32,18 +22,15 @@
             "nodes": [
               {
                 "ID_node": 0,
-                "SID": "SID_2_1",
-                "name_node": "Node 1"
+                "SID": "0001000100081",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
+                "name_node": "Node KV2.1"
               },
               {
                 "ID_node": 1,
-                "SID": "SID_2_2",
-                "name_node": "Node 2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "SID_2_3",
-                "name_node": "Node 3"
+                "SID": "0001000100082",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
+                "name_node": "Node KV2.2"
               }
             ]
           },
@@ -54,84 +41,21 @@
             "nodes": [
               {
                 "ID_node": 0,
-                "SID": "SID_3_1",
-                "name_node": "Node 1"
+                "SID": "0001000100083",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
+                "name_node": "Node KV3.1"
               },
               {
                 "ID_node": 1,
-                "SID": "SID_3_2",
-                "name_node": "Node 2"
+                "SID": "0001000100084",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
+                "name_node": "Node KV3.2"
               },
               {
                 "ID_node": 2,
-                "SID": "SID_3_3",
-                "name_node": "Node 3"
-              }
-            ]
-          },
-          {
-            "preset_name": "KV4",
-            "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=4",
-            "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "SID_4_1",
-                "name_node": "Node 1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "SID_4_2",
-                "name_node": "Node 2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "SID_4_3",
-                "name_node": "Node 3"
-              }
-            ]
-          },
-          {
-            "preset_name": "KV5",
-            "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=5",
-            "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "SID_5_1",
-                "name_node": "Node 1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "SID_5_2",
-                "name_node": "Node 2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "SID_5_3",
-                "name_node": "Node 3"
-              }
-            ]
-          },
-          {
-            "preset_name": "KV6",
-            "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=6",
-            "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "SID_6_1",
-                "name_node": "Node 1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "SID_6_2",
-                "name_node": "Node 2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "SID_6_3",
-                "name_node": "Node 3"
+                "SID": "0001000100085",
+                "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2",
+                "name_node": "Node KV3.3"
               }
             ]
           }
