@@ -87,9 +87,9 @@ The SES 110kV Thermal Measurement Application is a Python-based system designed 
   "cameras": [
     {
       "name": "camera_name",
-      "node_thermals": [
+      "preset_thermals": [
         {
-          "name": "node1",
+          "preset_name": "node1",
           "url_presetID": "http://.../ptz.cgi?...",
           "url_areaTemperature": "http://.../param.cgi?..."
         }
@@ -522,9 +522,9 @@ Each camera can have multiple thermal measurement nodes:
 ```json
 {
   "name": "0001000100082",
-  "node_thermals": [
+  "preset_thermals": [
     {
-      "name": "node1",
+      "preset_name": "node1",
       "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
       "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
     }
