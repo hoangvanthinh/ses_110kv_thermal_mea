@@ -11,6 +11,7 @@ from workers.mqtt_publisher import mqtt_publisher_worker
 from workers.mqtt_subscriber import mqtt_subscriber_worker
 from workers.rtsp_fetcher import rtsp_fetcher_worker
 from workers.ptz_controller import ptz_controller_worker
+from workers.mode_manager import ModeManager
 
 
 log = get_logger("worker_manager")
@@ -40,6 +41,7 @@ class WorkerThreads:
     mqtt_subscriber: Optional[threading.Thread] = None
     rtsp_fetcher: Optional[threading.Thread] = None
     ptz_controllers: List[threading.Thread] = field(default_factory=list)
+    mode_timeout_checker: Optional[threading.Thread] = None
     
     def all_threads(self) -> List[threading.Thread]:
         """Return all non-None threads as a flat list."""
@@ -50,6 +52,8 @@ class WorkerThreads:
             threads.append(self.mqtt_subscriber)
         if self.rtsp_fetcher:
             threads.append(self.rtsp_fetcher)
+        if self.mode_timeout_checker:
+            threads.append(self.mode_timeout_checker)
         return threads
 
 
@@ -63,6 +67,7 @@ class WorkerManager:
         self.out_queue: "queue.Queue[dict]" = queue.Queue(maxsize=100)
         self.cmd_queues = CommandQueues()
         self.threads = WorkerThreads()
+        self.mode_manager = ModeManager(default_manual_timeout=300)  # 5 minutes default
         
     def start_camera_pollers(self) -> List[threading.Thread]:
         """Start thermal camera polling threads."""
@@ -85,6 +90,7 @@ class WorkerManager:
                     float(camera_cfg.get("settle_seconds", 2.0)),
                     camera_cfg.get("url_snapshot"),
                     camera_cfg.get("img_server_host"),
+                    self.mode_manager,  # Pass mode_manager
                 ),
                 daemon=True,
                 name=f"camera:{camera_name}",
@@ -126,7 +132,7 @@ class WorkerManager:
         
         thread = threading.Thread(
             target=mqtt_subscriber_worker,
-            args=(mqtt_cfg, self.stop_event, self.cmd_queues.as_dict(), camera_names),
+            args=(mqtt_cfg, self.stop_event, self.cmd_queues.as_dict(), camera_names, self.mode_manager, self.out_queue),
             daemon=True,
             name="mqtt-subscriber",
         )
@@ -165,6 +171,7 @@ class WorkerManager:
                     self.stop_event,
                     camera_name,
                     camera_cfg,
+                    self.mode_manager,  # Pass mode_manager
                 ),
                 daemon=True,
                 name=f"ptz-controller:{camera_name}",
@@ -175,6 +182,28 @@ class WorkerManager:
         log.info("Started %d PTZ controller(s)", len(threads))
         return threads
     
+    def start_mode_timeout_checker(self) -> Optional[threading.Thread]:
+        """Start mode timeout checker thread."""
+        def timeout_checker_worker():
+            """Periodically check and revert manual mode timeouts."""
+            log.info("Mode timeout checker started")
+            while not self.stop_event.wait(2.0):  # Check every 2 seconds
+                try:
+                    self.mode_manager.check_and_revert_manual_timeouts()
+                except Exception as e:
+                    log.error("Error in mode timeout checker: %s", e)
+            log.info("Mode timeout checker stopped")
+        
+        thread = threading.Thread(
+            target=timeout_checker_worker,
+            daemon=True,
+            name="mode-timeout-checker",
+        )
+        thread.start()
+        
+        log.info("Started mode timeout checker")
+        return thread
+    
     def start_all(self) -> Tuple[WorkerThreads, "queue.Queue[dict]"]:
         """Start all worker threads."""
         log.info("Starting all workers...")
@@ -184,6 +213,7 @@ class WorkerManager:
         self.threads.mqtt_subscriber = self.start_mqtt_subscriber()
         self.threads.rtsp_fetcher = self.start_rtsp_fetcher()
         self.threads.ptz_controllers = self.start_ptz_controllers()
+        self.threads.mode_timeout_checker = self.start_mode_timeout_checker()
         
         mqtt_status = "enabled" if self.threads.mqtt_subscriber else "disabled"
         log.info(

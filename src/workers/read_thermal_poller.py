@@ -370,6 +370,7 @@ def _process_node_thermal(
     settle_seconds: float,
     url_snapshot: Optional[str] = None,
     img_server_host: Optional[str] = None,
+    mode_manager = None,
 ) -> bool:
     """
     Process a single thermal node: invoke preset, wait, read temperature.
@@ -383,6 +384,9 @@ def _process_node_thermal(
         password: Optional authentication password
         timeout_seconds: Request timeout
         settle_seconds: Time to wait after preset invocation
+        url_snapshot: Optional snapshot URL
+        img_server_host: Optional image server host
+        mode_manager: Optional mode manager for Auto/Manual control
         
     Returns:
         True if should continue, False if should stop
@@ -402,6 +406,16 @@ def _process_node_thermal(
     
     # Step 1: Invoke preset if configured
     if preset.preset_url:
+        # Check if we can invoke preset (AUTO mode only)
+        if mode_manager and not mode_manager.can_invoke_preset(camera_name):
+            log.info(
+                "[%s] Skipping preset '%s' invoke - camera in MANUAL mode",
+                camera_name, preset.name
+            )
+            # Still read temperature at current camera position
+            return _process_thermal_nodes(preset, camera_name, out_queue, stop_event, config)
+        
+        # AUTO mode - invoke preset as normal
         success = _invoke_preset(
             preset.preset_url,
             preset.name,
@@ -455,6 +469,7 @@ def poller_worker(
     settle_seconds: Optional[float] = None,
     url_snapshot: Optional[str] = None,
     img_server_host: Optional[str] = None,
+    mode_manager = None,
 ) -> None:
     """
     Thermal camera polling worker.
@@ -473,6 +488,7 @@ def poller_worker(
         settle_seconds: Time to wait after preset invocation (default: 5.0)
         url_snapshot: Optional URL to capture snapshot images
         img_server_host: Optional hostname/IP of image server
+        mode_manager: Optional mode manager for Auto/Manual control
     """
     if not preset_thermals:
         log.error("[%s] No preset_thermals configured", name)
@@ -508,6 +524,7 @@ def poller_worker(
                     settle_time,
                     url_snapshot,
                     img_server_host,
+                    mode_manager,
                 )
                 
                 if not should_continue:

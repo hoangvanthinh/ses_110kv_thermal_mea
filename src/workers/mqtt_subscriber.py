@@ -16,6 +16,8 @@ TOPIC_ROUTES = {
     "/ptz_preset": ("ptz_preset", "ptz"),
     "/ptz_move": ("ptz_move", "ptz"),
     "/get_temperature": ("get_temperature", "thermal"),
+    "/mode": ("set_mode", "mode"),  # Mode control
+    "/get_mode": ("get_mode", "mode"),  # Query mode status
     "/cmd": ("command", "broadcast"),  # Special case: broadcast to all queues
 }
 
@@ -41,7 +43,9 @@ def _extract_camera_name(topic: str, camera_names: List[str]) -> Optional[str]:
 def _route_message_to_queue(
     msg_data: Dict[str, Any],
     topic: str,
-    cmd_queues: Dict[str, queue.Queue[str]]
+    cmd_queues: Dict[str, queue.Queue[str]],
+    mode_manager = None,
+    out_queue = None,
 ) -> None:
     """
     Route message to appropriate command queue(s) based on topic.
@@ -50,7 +54,11 @@ def _route_message_to_queue(
         msg_data: Message data dictionary
         topic: MQTT topic
         cmd_queues: Dictionary of command queues
+        mode_manager: Optional mode manager for Auto/Manual control
+        out_queue: Optional output queue for responses
     """
+    from datetime import datetime
+    
     # Find matching route
     msg_type = None
     target_queue = None
@@ -63,6 +71,55 @@ def _route_message_to_queue(
     
     if not msg_type:
         log.debug("No route found for topic: %s", topic)
+        return
+    
+    # Handle mode control commands specially
+    if target_queue == "mode" and mode_manager:
+        camera_name = msg_data.get("camera")
+        payload = msg_data.get("payload", "")
+        
+        if msg_type == "get_mode":
+            # Query mode status
+            mode_info = mode_manager.get_mode_info(camera_name)
+            if out_queue:
+                try:
+                    mode_info["type"] = "mode_status"
+                    out_queue.put_nowait(mode_info)
+                except queue.Full:
+                    log.warning("Output queue full, dropping mode status for %s", camera_name)
+            log.debug("[%s] Mode query: %s", camera_name, mode_info.get("mode"))
+            
+        elif msg_type == "set_mode":
+            # Set mode command
+            try:
+                # Try to parse as JSON
+                try:
+                    data = json.loads(payload)
+                    mode_str = data.get("mode", "auto").lower()
+                    duration = data.get("duration_seconds")
+                except json.JSONDecodeError:
+                    # Plain text payload
+                    mode_str = payload.lower().strip()
+                    duration = None
+                
+                from workers.mode_manager import CameraMode
+                mode = CameraMode.MANUAL if mode_str == "manual" else CameraMode.AUTO
+                mode_manager.set_mode(camera_name, mode, duration_seconds=duration)
+                
+                # Send confirmation
+                if out_queue:
+                    try:
+                        out_queue.put_nowait({
+                            "camera": camera_name,
+                            "type": "mode_changed",
+                            "mode": mode.value,
+                            "timestamp": datetime.now().isoformat(timespec="seconds")
+                        })
+                    except queue.Full:
+                        pass
+                        
+            except Exception as e:
+                log.error("Error setting mode for %s: %s", camera_name, e)
         return
     
     msg_data["type"] = msg_type
@@ -120,7 +177,9 @@ def _create_on_connect_handler(
 
 def _create_on_message_handler(
     camera_names: List[str],
-    cmd_queues: Optional[Dict[str, queue.Queue[str]]]
+    cmd_queues: Optional[Dict[str, queue.Queue[str]]],
+    mode_manager = None,
+    out_queue = None,
 ) -> Callable:
     """
     Create on_message callback for MQTT client.
@@ -128,6 +187,8 @@ def _create_on_message_handler(
     Args:
         camera_names: List of camera names
         cmd_queues: Dictionary of command queues
+        mode_manager: Optional mode manager for Auto/Manual control
+        out_queue: Optional output queue for responses
         
     Returns:
         Callback function for MQTT on_message event
@@ -156,7 +217,7 @@ def _create_on_message_handler(
                     "topic": topic,
                     "payload": payload_text.strip()
                 }
-                _route_message_to_queue(msg_data, topic, cmd_queues)
+                _route_message_to_queue(msg_data, topic, cmd_queues, mode_manager, out_queue)
             except Exception as e:
                 log.error("Error routing command from topic '%s': %s", topic, e)
     
@@ -211,6 +272,8 @@ def mqtt_subscriber_worker(
     stop_event: threading.Event,
     cmd_queues: Optional[Dict[str, queue.Queue[str]]] = None,
     camera_names: List[str] = [],
+    mode_manager = None,
+    out_queue = None,
 ) -> None:
     """
     MQTT subscriber worker that listens to camera topics and routes messages.
@@ -220,6 +283,8 @@ def mqtt_subscriber_worker(
         stop_event: Event to signal worker shutdown
         cmd_queues: Dictionary of command queues for routing messages
         camera_names: List of camera names to monitor
+        mode_manager: Optional mode manager for Auto/Manual control
+        out_queue: Optional output queue for mode status responses
     """
     try:
         import paho.mqtt.client as mqtt  # type: ignore
@@ -242,7 +307,7 @@ def mqtt_subscriber_worker(
     
     # Set up callbacks
     client.on_connect = _create_on_connect_handler(subscribe_topics)
-    client.on_message = _create_on_message_handler(camera_names, cmd_queues)
+    client.on_message = _create_on_message_handler(camera_names, cmd_queues, mode_manager, out_queue)
     
     # Connect to MQTT broker
     try:

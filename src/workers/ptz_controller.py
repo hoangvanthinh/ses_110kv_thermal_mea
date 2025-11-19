@@ -1,4 +1,11 @@
 """PTZ (Pan-Tilt-Zoom) controller worker."""
+"""docstring:
+This module contains the PTZ controller worker.
+It is responsible for controlling the PTZ camera.
+It listens to the command queue for PTZ preset and movement commands,
+executes them, and reports results.
+Sesion:  2.5.3.3.	PTZ position command rotate 
+"""
 import threading
 import queue
 import json
@@ -12,15 +19,24 @@ from utils.logging import get_logger
 log = get_logger("workers.ptz_controller")
 
 
+# Global dictionary to track auto-stop timers for each camera
+_active_timers: Dict[str, threading.Timer] = {}
+
+
 # PTZ direction to action parameter mapping
 PTZ_DIRECTION_MAP = {
+    "home": "action=home",
     "up": "action=moveUp",
     "down": "action=moveDown",
     "left": "action=moveLeft",
     "right": "action=moveRight",
+    "up-left": "action=moveUpLeft",
+    "up-right": "action=moveUpRight",
+    "down-left": "action=moveDownLeft",
+    "down-right": "action=moveDownRight",
+    "stop": "action=stop",
     "zoom_in": "action=zoomIn",
     "zoom_out": "action=zoomOut",
-    "stop": "action=stop",
 }
 
 
@@ -147,9 +163,11 @@ def _execute_ptz_move(
     camera_name: str,
     ptz_config: Dict[str, Any],
     out_queue: "queue.Queue[dict]",
+    mode_manager = None,
+    timeout_seconds: float = 2.0,
 ) -> bool:
     """
-    Execute PTZ movement command.
+    Execute PTZ movement command with auto-stop timeout.
     
     Args:
         direction: Movement direction
@@ -157,10 +175,25 @@ def _execute_ptz_move(
         camera_name: Name of camera
         ptz_config: PTZ configuration
         out_queue: Output queue for results
+        mode_manager: Optional mode manager for Auto/Manual control
+        timeout_seconds: Seconds before auto-stop (default: 2.0)
         
     Returns:
         True if successful, False otherwise
     """
+    # Auto-switch to MANUAL mode when receiving manual control command
+    if mode_manager:
+        from workers.mode_manager import CameraMode
+        mode_manager.set_mode(camera_name, CameraMode.MANUAL, duration_seconds=300)  # 5 min
+        log.info("[%s] Switched to MANUAL mode (auto-revert in 5 min)", camera_name)
+    
+    # Cancel any active timer when receiving new command (including stop)
+    # This prevents previous move from auto-stopping after new command
+    _cancel_active_timer(camera_name)
+    
+    if direction == "stop":
+        log.info("[%s] Received explicit STOP command", camera_name)
+    
     # Validate direction
     if direction not in PTZ_DIRECTION_MAP:
         log.error(f"Invalid PTZ direction: {direction}")
@@ -176,7 +209,8 @@ def _execute_ptz_move(
         return False
     
     # Build PTZ move URL
-    base_url = ptz_config.get("base_url", "")
+    # base_url = ptz_config.get("base_url", "")
+    base_url = "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1"
     if not base_url:
         log.error(f"No base URL configured for PTZ moves on {camera_name}")
         _emit_ptz_result(
@@ -192,10 +226,27 @@ def _execute_ptz_move(
     
     # Build full URL with action and speed
     action = PTZ_DIRECTION_MAP[direction]
-    if direction != "stop":
-        move_url = f"{base_url}?{action}&speed={speed}"
+    log.info(f"Action: {action}")
+    if direction == "right":
+        move_url = f"{base_url}&action=rotate&pan=10&tilt=0"
+    elif direction == "left":
+        move_url = f"{base_url}&action=rotate&pan=-10&tilt=0"
+    elif direction == "up":
+        move_url = f"{base_url}&action=rotate&pan=0&tilt=10"
+    elif direction == "down":
+        move_url = f"{base_url}&action=rotate&pan=0&tilt=-10"
+    elif direction == "up-left":
+        move_url = f"{base_url}&action=rotate&pan=-10&tilt=10"
+    elif direction == "up-right":
+        move_url = f"{base_url}&action=rotate&pan=10&tilt=10"
+    elif direction == "down-left":
+        move_url = f"{base_url}&action=rotate&pan=-10&tilt=-10"
+    elif direction == "down-right":
+        move_url = f"{base_url}&action=rotate&pan=10&tilt=-10"
+    elif direction == "stop":
+        move_url = f"{base_url}&action=stop"
     else:
-        move_url = f"{base_url}?{action}"
+        move_url = f"{base_url}&action=stop"
     
     # Execute PTZ move
     try:
@@ -207,6 +258,12 @@ def _execute_ptz_move(
         )
         
         log.info(f"PTZ move {direction} at speed {speed} executed for {camera_name}")
+        
+        # Schedule auto-stop for movement commands (not for stop command)
+        if direction != "stop":
+            _schedule_auto_stop(camera_name, ptz_config, out_queue, timeout_seconds)
+            log.info(f"[{camera_name}] PTZ will auto-stop in {timeout_seconds}s")
+        
         _emit_ptz_result(
             out_queue,
             camera_name,
@@ -214,6 +271,7 @@ def _execute_ptz_move(
             "success",
             direction=direction,
             speed=speed,
+            timeout=timeout_seconds,
         )
         return True
         
@@ -231,27 +289,125 @@ def _execute_ptz_move(
         return False
 
 
-def _parse_ptz_move_payload(payload: str) -> Tuple[str, int]:
+def _cancel_active_timer(camera_name: str) -> None:
+    """
+    Cancel active auto-stop timer for camera.
+    
+    Args:
+        camera_name: Name of camera
+    """
+    if camera_name in _active_timers:
+        timer = _active_timers[camera_name]
+        if timer.is_alive():
+            timer.cancel()
+            log.debug("[%s] Cancelled active auto-stop timer", camera_name)
+        del _active_timers[camera_name]
+
+
+def _schedule_auto_stop(
+    camera_name: str,
+    ptz_config: Dict[str, Any],
+    out_queue: "queue.Queue[dict]",
+    timeout_seconds: float,
+) -> None:
+    """
+    Schedule automatic stop command after timeout.
+    
+    Args:
+        camera_name: Name of camera
+        ptz_config: PTZ configuration
+        out_queue: Output queue for results
+        timeout_seconds: Seconds before auto-stop
+    """
+    def auto_stop():
+        log.info("[%s] Auto-stopping PTZ after %.1fs timeout", camera_name, timeout_seconds)
+        # Send stop command
+        base_url = "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1"
+        stop_url = f"{base_url}&action=stop"
+        
+        try:
+            fetch_text(
+                stop_url,
+                timeout_seconds=5.0,
+                username=ptz_config.get("username"),
+                password=ptz_config.get("password"),
+            )
+            log.info("[%s] PTZ auto-stopped successfully", camera_name)
+            
+            _emit_ptz_result(
+                out_queue,
+                camera_name,
+                "ptz_auto_stop",
+                "success",
+                message="Auto-stopped after timeout"
+            )
+        except Exception as e:
+            log.error("[%s] Auto-stop failed: %s", camera_name, e)
+        
+        # Clean up timer reference
+        if camera_name in _active_timers:
+            del _active_timers[camera_name]
+    
+    # Cancel any existing timer
+    _cancel_active_timer(camera_name)
+    
+    # Schedule new timer
+    timer = threading.Timer(timeout_seconds, auto_stop)
+    timer.daemon = True
+    timer.start()
+    _active_timers[camera_name] = timer
+    
+    log.debug("[%s] Scheduled auto-stop in %.1fs", camera_name, timeout_seconds)
+
+
+def _parse_ptz_move_payload(payload: str) -> Tuple[str, int, float]:
     """
     Parse PTZ move command payload.
     
     Args:
-        payload: Payload string in format "direction" or "direction:speed"
+        payload: Payload string in format:
+                 - "direction" (e.g., "up")
+                 - "direction:speed" (e.g., "up:8")
+                 - "direction:speed:timeout" (e.g., "up:8:3.5")
+                 - JSON: {"direction": "up", "speed": 8, "timeout": 3.5}
         
     Returns:
-        Tuple of (direction, speed)
+        Tuple of (direction, speed, timeout_seconds)
     """
+    default_timeout = 2.0  # Default 2 seconds
+    
+    # Try to parse as JSON first
+    try:
+        data = json.loads(payload)
+        direction = data.get("direction", "stop")
+        speed = int(data.get("speed", 5))
+        timeout = float(data.get("timeout", default_timeout))
+        return direction, speed, timeout
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    
+    # Parse as colon-separated string
     if ":" in payload:
-        direction, speed_str = payload.split(":", 1)
+        parts = payload.split(":")
+        direction = parts[0]
+        
+        # Parse speed
         try:
-            speed = int(speed_str)
+            speed = int(parts[1]) if len(parts) > 1 else 5
         except ValueError:
-            speed = 5  # Default speed
+            speed = 5
+        
+        # Parse timeout
+        try:
+            timeout = float(parts[2]) if len(parts) > 2 else default_timeout
+        except (ValueError, IndexError):
+            timeout = default_timeout
     else:
         direction = payload
-        speed = 5  # Default speed
+        speed = 5
+        timeout = default_timeout
     
-    return direction, speed
+    return direction, speed, timeout
 
 
 def _process_ptz_command(
@@ -259,6 +415,7 @@ def _process_ptz_command(
     camera_name: str,
     ptz_config: Dict[str, Any],
     out_queue: "queue.Queue[dict]",
+    mode_manager = None,
 ) -> None:
     """
     Process PTZ command.
@@ -268,6 +425,7 @@ def _process_ptz_command(
         camera_name: Name of camera
         ptz_config: PTZ configuration
         out_queue: Output queue for results
+        mode_manager: Optional mode manager for Auto/Manual control
     """
     # Only process commands for this camera
     if cmd_data.get("camera") != camera_name:
@@ -287,8 +445,9 @@ def _process_ptz_command(
     elif cmd_type == "ptz_move":
         # Parse movement command from payload
         try:
-            direction, speed = _parse_ptz_move_payload(payload)
-            _execute_ptz_move(direction, speed, camera_name, ptz_config, out_queue)
+            direction, speed, timeout = _parse_ptz_move_payload(payload)
+            log.info(f"Direction: {direction}, Speed: {speed}, Timeout: {timeout}s")
+            _execute_ptz_move(direction, speed, camera_name, ptz_config, out_queue, mode_manager, timeout)
         except Exception as e:
             log.error(f"Invalid PTZ move command: {payload} - {e}")
     
@@ -303,6 +462,7 @@ def ptz_controller_worker(
     stop_event: threading.Event,
     camera_name: str,
     ptz_config: Dict[str, Any],
+    mode_manager = None,
     poll_interval_seconds: float = 0.5,
 ) -> None:
     """
@@ -317,6 +477,7 @@ def ptz_controller_worker(
         stop_event: Event to signal shutdown
         camera_name: Name of the camera this controller manages
         ptz_config: Configuration for PTZ operations
+        mode_manager: Optional mode manager for Auto/Manual control
         poll_interval_seconds: How often to check for commands (default: 0.5)
     """
     log.info("PTZ controller started for camera: %s", camera_name)
@@ -330,7 +491,7 @@ def ptz_controller_worker(
         
         try:
             cmd_data = json.loads(cmd)
-            _process_ptz_command(cmd_data, camera_name, ptz_config, out_queue)
+            _process_ptz_command(cmd_data, camera_name, ptz_config, out_queue, mode_manager)
         except json.JSONDecodeError:
             log.error(f"Invalid JSON command: {cmd}")
         except Exception as e:
