@@ -1,10 +1,36 @@
 import json
 import os
+import re
 from typing import Dict, Any, List
 from utils.types import AppConfig
 
 
 DEFAULT_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+
+
+def _substitute_variables(obj: Any, variables: Dict[str, str]) -> Any:
+    """
+    Recursively substitute ${variable} in strings with actual values.
+    
+    Args:
+        obj: Object to process (dict, list, str, or other)
+        variables: Dictionary of variable name -> value
+        
+    Returns:
+        Object with variables substituted
+    """
+    if isinstance(obj, dict):
+        return {k: _substitute_variables(v, variables) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_substitute_variables(item, variables) for item in obj]
+    elif isinstance(obj, str):
+        # Replace ${variable_name} with actual value
+        def replacer(match):
+            var_name = match.group(1)
+            return variables.get(var_name, match.group(0))  # Keep original if not found
+        return re.sub(r'\$\{([^}]+)\}', replacer, obj)
+    else:
+        return obj
 
 
 def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
@@ -26,6 +52,17 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     normalized_cameras: List[Dict[str, Any]] = []
     for p in config.get("cameras", []) or []:
         p = dict(p)
+        
+        # Build variables dictionary for this camera
+        variables = {}
+        for key, value in p.items():
+            if isinstance(value, str) and not value.startswith("http"):
+                # Potential variable (e.g., cameara_ip, camera_ip)
+                variables[key] = value
+        
+        # Substitute variables in all URLs
+        p = _substitute_variables(p, variables)
+        
         if "presets" not in p or not p.get("presets"):
             preset: Dict[str, Any] = {}
             if p.get("url_presetID") or p.get("url_areaTemperature"):
