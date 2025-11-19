@@ -2,7 +2,24 @@
 
 ## 1. Điều khiển di chuyển PTZ (Manual)
 **Topic:** `camera/[camera_id]/ptz_move`  
-**Payload:** `[command]` hoặc `[command]:[speed]`  
+
+### Payload formats:
+
+**1. Simple (plain text):**
+```
+[direction]                    # Default: speed=5, timeout=2s
+[direction]:[speed]            # Custom speed, timeout=2s
+[direction]:[speed]:[timeout]  # Full control
+```
+
+**2. JSON:**
+```json
+{
+  "direction": "right",
+  "speed": 8,
+  "timeout": 3.5
+}
+```
 
 ### Command list:   
 - `up`: Di chuyển lên  
@@ -14,22 +31,70 @@
 - `down-left`: Di chuyển chéo dưới-trái  
 - `down-right`: Di chuyển chéo dưới-phải  
 - `home`: Về vị trí gốc  
-- `stop`: Dừng di chuyển  
+- `stop`: Dừng di chuyển ngay lập tức  
 - `zoom_in`: Zoom vào  
 - `zoom_out`: Zoom ra  
 
 ### Ví dụ:
 ```bash
-# Di chuyển lên với tốc độ mặc định (5)
+# Di chuyển lên (mặc định: speed=5, auto-stop sau 2s)
 Topic: camera/000100010008/ptz_move
 Payload: up
 
-# Di chuyển phải với tốc độ 8
+# Di chuyển phải với tốc độ 8 (auto-stop sau 2s)
 Topic: camera/000100010008/ptz_move
 Payload: right:8
+
+# Di chuyển xuống với tốc độ 6, auto-stop sau 3.5 giây
+Topic: camera/000100010008/ptz_move
+Payload: down:6:3.5
+
+# Di chuyển bằng JSON (full control)
+Topic: camera/000100010008/ptz_move
+Payload: {"direction": "left", "speed": 7, "timeout": 5.0}
+
+# Dừng ngay lập tức (cancel auto-stop timer)
+Topic: camera/000100010008/ptz_move
+Payload: stop
 ```
 
-**Lưu ý:** Khi nhận lệnh `ptz_move`, camera tự động chuyển sang chế độ **MANUAL** trong 5 phút. Trong chế độ này, thermal poller sẽ KHÔNG invoke preset tự động.
+---
+
+### ⚙️ Auto-Stop Mechanism (Hybrid Approach)
+
+**Cách hoạt động:**
+1. Mỗi lệnh move có **timeout mặc định 2 giây**
+2. App **tự động gửi lệnh stop** sau timeout
+3. User có thể:
+   - ✅ **Stop sớm hơn**: Gửi lệnh `stop` bất kỳ lúc nào
+   - ✅ **Override timeout**: Đặt timeout tùy chỉnh trong payload
+   - ✅ **Continuous move**: Gửi lệnh mới trước khi timeout (cancel timer cũ)
+
+**Ví dụ continuous move:**
+```bash
+# T=0s: User giữ nút RIGHT
+Payload: right           # Move, auto-stop sau 2s
+
+# T=0.5s: Vẫn giữ nút → Gửi lại
+Payload: right           # Cancel timer cũ, move tiếp 2s nữa
+
+# T=1.0s: Vẫn giữ nút → Gửi lại
+Payload: right           # Cancel timer cũ, move tiếp 2s nữa
+
+# T=1.5s: Thả nút → Không gửi nữa
+# → Camera tự động stop sau 2s kể từ lệnh cuối (tức T=3.5s)
+```
+
+**Safety Features:**
+- ✅ Camera không bao giờ move mãi mãi
+- ✅ Không phụ thuộc vào lệnh stop từ MQTT
+- ✅ Linh hoạt - user kiểm soát được thời gian move
+- ✅ Timer tự động cancel khi có lệnh mới
+
+**Lưu ý:** 
+- Khi nhận lệnh `ptz_move`, camera tự động chuyển sang chế độ **MANUAL** trong 5 phút
+- Trong chế độ MANUAL, thermal poller sẽ KHÔNG invoke preset tự động
+- Mỗi lệnh move mới sẽ **cancel timer** của lệnh trước
 
 ---
 
