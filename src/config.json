@@ -68,6 +68,7 @@
         "settle_seconds": 5,
         "url_get_rtsp_url": "http://${camera_ip}/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1",
         "url_snapshot": "http://${camera_ip}/cgi-bin/image.cgi?cameraID=1&quality=5",
+        "url_ptz_base": "http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1",
         "img_server_host": "192.168.1.163"
       }
     ],

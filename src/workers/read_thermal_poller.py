@@ -413,7 +413,8 @@ def _process_node_thermal(
                 camera_name, preset.name
             )
             # Still read temperature at current camera position
-            return _process_thermal_nodes(preset, camera_name, out_queue, stop_event, config)
+            # return _process_thermal_nodes(preset, camera_name, out_queue, stop_event, config)
+            return True
         
         # AUTO mode - invoke preset as normal
         success = _invoke_preset(

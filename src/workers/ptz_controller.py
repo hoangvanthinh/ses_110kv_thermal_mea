@@ -210,7 +210,7 @@ def _execute_ptz_move(
     
     # Build PTZ move URL
     # base_url = ptz_config.get("base_url", "")
-    base_url = "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1"
+    base_url = ptz_config.get("url_ptz_base", "")
     if not base_url:
         log.error(f"No base URL configured for PTZ moves on {camera_name}")
         _emit_ptz_result(
