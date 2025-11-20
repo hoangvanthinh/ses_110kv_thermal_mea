@@ -33,6 +33,62 @@ def _substitute_variables(obj: Any, variables: Dict[str, str]) -> Any:
         return obj
 
 
+def _build_urls_from_templates(camera: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build URLs from templates for preset_thermals configuration.
+    
+    Converts new compact format (preset_id, area_id) to full URLs using url_templates.
+    Also handles legacy format (url_presetID, url_areaTemperature) for backward compatibility.
+    
+    Args:
+        camera: Camera configuration dictionary
+        
+    Returns:
+        Camera configuration with URLs built from templates
+    """
+    url_templates = camera.get("url_templates", {})
+    
+    # If no url_templates, return as-is (legacy format)
+    if not url_templates:
+        return camera
+    
+    # Build common URLs from templates
+    camera_ip = camera.get("camera_ip", "")
+    
+    if url_templates.get("snapshot"):
+        camera["url_snapshot"] = url_templates["snapshot"].replace("${camera_ip}", camera_ip)
+    
+    if url_templates.get("ptz_base"):
+        camera["url_ptz_base"] = url_templates["ptz_base"].replace("${camera_ip}", camera_ip)
+    
+    if url_templates.get("rtsp"):
+        camera["url_get_rtsp_url"] = url_templates["rtsp"].replace("${camera_ip}", camera_ip)
+    
+    # Process preset_thermals
+    preset_thermals = camera.get("preset_thermals", [])
+    for preset in preset_thermals:
+        # Build preset URL if preset_id exists and url_presetID doesn't
+        if "preset_id" in preset and "url_presetID" not in preset:
+            preset_template = url_templates.get("preset", "")
+            if preset_template:
+                preset_url = preset_template.replace("${camera_ip}", camera_ip)
+                preset_url = preset_url.replace("${preset_id}", str(preset["preset_id"]))
+                preset["url_presetID"] = preset_url
+        
+        # Build node URLs
+        nodes = preset.get("nodes", [])
+        for node in nodes:
+            # Build area temperature URL if area_id exists and url_areaTemperature doesn't
+            if "area_id" in node and "url_areaTemperature" not in node:
+                area_template = url_templates.get("area_temperature", "")
+                if area_template:
+                    area_url = area_template.replace("${camera_ip}", camera_ip)
+                    area_url = area_url.replace("${area_id}", str(node["area_id"]))
+                    node["url_areaTemperature"] = area_url
+    
+    return camera
+
+
 def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
@@ -59,6 +115,9 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
             if isinstance(value, str) and not value.startswith("http"):
                 # Potential variable (e.g., cameara_ip, camera_ip)
                 variables[key] = value
+        
+        # Build URLs from templates (new compact format)
+        p = _build_urls_from_templates(p)
         
         # Substitute variables in all URLs
         p = _substitute_variables(p, variables)

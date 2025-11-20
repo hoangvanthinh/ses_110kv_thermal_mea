@@ -16,8 +16,8 @@ def main() -> None:
     # Start all workers
     threads, out_queue = worker_manager.start_all()
 
-    # UI setup (commented out until ready)
-    # register_pages(out_queue)
+    # UI setup
+    register_pages(out_queue)
 
     # Register shutdown hook
     @app.on_shutdown

@@ -1,88 +1,97 @@
 {
-    "cameras": [
-      {
-        "camera_name": "000100010008",
-        "camera_ip": "192.168.1.171",
-        "preset_thermals": [
-          {
-            "preset_name": "KV1",
-            "url_presetID": "http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "0001000100080",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
-                "name_node": "Node KV1.1"
-              }
-            ]
-          },
-          {
-            "preset_name": "KV2",
-            "url_presetID": "http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=2", 
-            "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "0001000100081",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
-                "name_node": "Node KV2.1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "0001000100082",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-                "name_node": "Node KV2.2"
-              }
-            ]
-          },
-          {
-            "preset_name": "KV3",
-            "url_presetID": "http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=3",
-            "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-            "nodes": [
-              {
-                "ID_node": 0,
-                "SID": "0001000100083",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0",
-                "name_node": "Node KV3.1"
-              },
-              {
-                "ID_node": 1,
-                "SID": "0001000100084",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1",
-                "name_node": "Node KV3.2"
-              },
-              {
-                "ID_node": 2,
-                "SID": "0001000100085",
-                "url_areaTemperature": "http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2",
-                "name_node": "Node KV3.3"
-              }
-            ]
-          }
-        ],
-        "username": "admin",
-        "password": "thinh0702",
-        "interval_seconds": 30,
-        "timeout_seconds": 5,
-        "settle_seconds": 5,
-        "url_get_rtsp_url": "http://${camera_ip}/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1",
-        "url_snapshot": "http://${camera_ip}/cgi-bin/image.cgi?cameraID=1&quality=5",
-        "url_ptz_base": "http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1",
-        "img_server_host": "192.168.1.163"
+  "cameras": [
+    {
+      "camera_name": "000100010008",
+      "camera_ip": "192.168.1.171",
+      "username": "admin",
+      "password": "thinh0702",
+      "interval_seconds": 30,
+      "timeout_seconds": 5,
+      "settle_seconds": 5,
+      "img_server_host": "192.168.1.163",
+      "preset_thermals": [
+        {
+          "preset_name": "KV1",
+          "preset_id": 1,
+          "nodes": [
+            {
+              "ID_node": 0,
+              "SID": "0001000100080",
+              "area_id": 0,
+              "name_node": "Node KV1.1",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0"
+            }
+          ],
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=1"
+        },
+        {
+          "preset_name": "KV2",
+          "preset_id": 2,
+          "nodes": [
+            {
+              "ID_node": 0,
+              "SID": "0001000100081",
+              "area_id": 0,
+              "name_node": "Node KV2.1",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0"
+            },
+            {
+              "ID_node": 1,
+              "SID": "0001000100082",
+              "area_id": 1,
+              "name_node": "Node KV2.2",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+            }
+          ],
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=2"
+        },
+        {
+          "preset_name": "KV3",
+          "preset_id": 3,
+          "nodes": [
+            {
+              "ID_node": 0,
+              "SID": "0001000100083",
+              "area_id": 0,
+              "name_node": "Node KV3.1",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=0"
+            },
+            {
+              "ID_node": 1,
+              "SID": "0001000100084",
+              "area_id": 1,
+              "name_node": "Node KV3.2",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=1"
+            },
+            {
+              "ID_node": 2,
+              "SID": "0001000100085",
+              "area_id": 2,
+              "name_node": "Node KV3.3",
+              "url_areaTemperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=2"
+            }
+          ],
+          "url_presetID": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=3"
+        }
+      ],
+      "url_templates": {
+        "preset": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=${preset_id}",
+        "area_temperature": "http://192.168.1.171/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=${area_id}",
+        "rtsp": "http://192.168.1.171/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1",
+        "snapshot": "http://192.168.1.171/cgi-bin/image.cgi?cameraID=1&quality=5",
+        "ptz_base": "http://192.168.1.171/cgi-bin/ptz.cgi?cameraID=1"
       }
-    ],
-    "mqtt": {
-      "enabled": true,
-      "host": "192.168.1.86",
-      "port": 1883,
-      "topic": "camera",
-      "topic_temperature": "S3M_TOPIC_DATA",
-      "topic_req_url": "camera/get_url",
-      "topic_url": "camera/url",
-      "username": "mqtt-test",
-      "password": "mqtt-test"
     }
+  ],
+  "mqtt": {
+    "enabled": true,
+    "host": "192.168.1.86",
+    "port": 1883,
+    "topic": "camera",
+    "topic_temperature": "S3M_TOPIC_DATA",
+    "topic_req_url": "camera/get_url",
+    "topic_url": "camera/url",
+    "username": "mqtt-test",
+    "password": "mqtt-test"
   }
-  
-  
+}
