@@ -46,6 +46,7 @@ def _build_urls_from_templates(camera: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Camera configuration with URLs built from templates
     """
+    # Get templates from camera (old format) - will be overridden by global templates if provided
     url_templates = camera.get("url_templates", {})
     
     # If no url_templates, return as-is (legacy format)
@@ -96,7 +97,7 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
     if "cameras" not in config:
         config["cameras"] = [
             {
-                "camera_name": "default",
+                "camera_sid": "default",
                 "url": config.get("url"),
                 "username": config.get("username"),
                 "password": config.get("password"),
@@ -104,10 +105,22 @@ def load_config(config_path: str = DEFAULT_CONFIG_PATH) -> AppConfig:
             }
         ]
 
+    # Get global settings from root level (if exists)
+    global_url_templates = config.get("url_templates", {})
+    global_img_server_host = config.get("img_server_host", "")
+    
     # Normalize cameras: ensure each has a cameras list
     normalized_cameras: List[Dict[str, Any]] = []
     for p in config.get("cameras", []) or []:
         p = dict(p)
+        
+        # Inject global url_templates if camera doesn't have its own
+        if global_url_templates and "url_templates" not in p:
+            p["url_templates"] = global_url_templates
+        
+        # Inject global img_server_host if camera doesn't have its own
+        if global_img_server_host and "img_server_host" not in p:
+            p["img_server_host"] = global_img_server_host
         
         # Build variables dictionary for this camera
         variables = {}

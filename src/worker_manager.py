@@ -74,7 +74,7 @@ class WorkerManager:
         threads: List[threading.Thread] = []
         
         for idx, camera_cfg in enumerate(self.config.get("cameras", []), start=1):
-            camera_name = str(camera_cfg.get("camera_name") or f"camera_{idx}")
+            camera_name = str(camera_cfg.get("camera_sid") or f"camera_{idx}")
             
             thread = threading.Thread(
                 target=poller_worker,
@@ -125,9 +125,9 @@ class WorkerManager:
             return None
         
         camera_names = [
-            p.get("camera_name") 
+            p.get("camera_sid") 
             for p in self.config.get("cameras", []) 
-            if p.get("camera_name")
+            if p.get("camera_sid")
         ]
         
         thread = threading.Thread(
@@ -159,7 +159,7 @@ class WorkerManager:
         threads: List[threading.Thread] = []
         
         for camera_cfg in self.config.get("cameras", []):
-            camera_name = camera_cfg.get("camera_name")
+            camera_name = camera_cfg.get("camera_sid")
             if not camera_name:
                 continue
                 

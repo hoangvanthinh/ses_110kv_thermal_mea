@@ -37,6 +37,14 @@ class CameraEditor:
         # Input references for data binding
         self.inputs = {}
     
+    def _reload_camera_data(self):
+        """Reload camera data from config file."""
+        from config_loader import load_config
+        config = load_config()
+        cameras = config.get("cameras", [])
+        if self.cam_idx < len(cameras):
+            self.camera_data = cameras[self.cam_idx]
+    
     def render(self):
         """Render camera editor UI."""
         # Get saved expansion and tab state
@@ -45,7 +53,7 @@ class CameraEditor:
         active_camera_tab = app.storage.user.get(f'{storage_key}_tab', 'basic')
         
         with ui.expansion(
-            f"📹 {self.camera_data.get('camera_name', f'Camera {self.cam_idx+1}')}", 
+            f"📹 {self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}')}", 
             icon='videocam',
             value=is_expanded
         ).classes('w-full mb-4') as expansion:
@@ -86,9 +94,9 @@ class CameraEditor:
         ui.label('Camera Configuration').classes('text-subtitle2 text-grey-7 mb-3')
         
         with ui.grid(columns=2).classes('w-full gap-4 mb-4'):
-            self.inputs['camera_name'] = ui.input(
-                'Camera Name', 
-                value=self.camera_data.get('camera_name', '')
+            self.inputs['camera_sid'] = ui.input(
+                'Camera SID', 
+                value=self.camera_data.get('camera_sid', '')
             ).classes('w-full').props('outlined')
             
             self.inputs['camera_ip'] = ui.input(
@@ -127,6 +135,7 @@ class CameraEditor:
                 min=1, max=30
             ).classes('w-full').props('outlined')
     
+    @ui.refreshable
     def _render_presets(self):
         """Render presets section."""
         presets = self.camera_data.get('preset_thermals', [])
@@ -229,16 +238,22 @@ class CameraEditor:
     
     def _render_actions(self):
         """Render action buttons."""
-        with ui.row().classes('w-full justify-end gap-2'):
-            ui.button('Cancel', icon='close', color='grey', 
-                     on_click=self._cancel_changes).props('outline')
-            ui.button('Save Changes', icon='save', color='primary', 
-                     on_click=self._save_changes)
+        with ui.row().classes('w-full justify-between gap-2'):
+            # Delete button on the left
+            ui.button('Delete Camera', icon='delete', color='red', 
+                     on_click=self._delete_camera).props('outline')
+            
+            # Save/Cancel buttons on the right
+            with ui.row().classes('gap-2'):
+                ui.button('Cancel', icon='close', color='grey', 
+                         on_click=self._cancel_changes).props('outline')
+                ui.button('Save Changes', icon='save', color='primary', 
+                         on_click=self._save_changes)
     
     def _collect_data(self) -> Dict[str, Any]:
         """Collect data from all inputs."""
         data = {
-            'camera_name': self.inputs['camera_name'].value,
+            'camera_sid': self.inputs['camera_sid'].value,
             'camera_ip': self.inputs['camera_ip'].value,
             'username': self.inputs['username'].value,
             'password': self.inputs['password'].value,
@@ -258,8 +273,8 @@ class CameraEditor:
             updated_data = self._collect_data()
             
             # Validate
-            if not updated_data['camera_name']:
-                notify_custom('❌ Camera name is required', type='negative')
+            if not updated_data['camera_sid']:
+                notify_custom('❌ Camera SID is required', type='negative')
                 return
             
             if not updated_data['camera_ip']:
@@ -284,6 +299,47 @@ class CameraEditor:
         # Delay reload to show notification
         ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
+    def _delete_camera(self):
+        """Delete camera with confirmation dialog."""
+        camera_sid = self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}')
+        
+        with ui.dialog() as dialog, ui.card():
+            ui.label(f'Delete Camera: {camera_sid}?').classes('text-h6 mb-4')
+            ui.label('⚠️ This will permanently delete this camera and all its presets.').classes('text-warning mb-4')
+            ui.label('This action cannot be undone.').classes('text-grey mb-4')
+            
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button('Cancel', on_click=dialog.close).props('flat')
+                ui.button('Delete', color='red', on_click=lambda: self._confirm_delete_camera(dialog))
+        
+        dialog.open()
+    
+    def _confirm_delete_camera(self, dialog):
+        """Confirm and delete camera."""
+        try:
+            # Load current config
+            with open(DEFAULT_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+            
+            # Remove camera at index
+            if self.cam_idx < len(config['cameras']):
+                camera_sid = config['cameras'][self.cam_idx].get('camera_sid', f'Camera {self.cam_idx+1}')
+                del config['cameras'][self.cam_idx]
+                
+                # Save to file
+                with open(DEFAULT_CONFIG_PATH, 'w', encoding='utf-8') as f:
+                    json.dump(config, f, indent=2, ensure_ascii=False)
+                
+                dialog.close()
+                notify_custom(f'🗑️ Camera "{camera_sid}" deleted! Reloading...', type='warning')
+                # Delay reload to show notification
+                ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
+            else:
+                notify_custom('❌ Camera not found', type='negative')
+        
+        except Exception as e:
+            notify_custom(f'❌ Error deleting camera: {str(e)}', type='negative')
+    
     def _edit_preset_dialog(self, preset_idx: int):
         """Open dialog to edit preset."""
         preset = self.camera_data['preset_thermals'][preset_idx]
@@ -301,60 +357,123 @@ class CameraEditor:
             ui.label('💡 URL will be auto-generated: ...presetID=${preset_id}') \
                 .classes('text-caption text-grey-7 mb-4')
             
-            # Nodes
-            ui.label('Thermal Nodes:').classes('text-subtitle2 font-bold mb-2')
-            nodes = preset.get('nodes', [])
+            # Nodes section header with Add button
+            with ui.row().classes('w-full justify-between items-center mb-2'):
+                ui.label('Thermal Nodes:').classes('text-subtitle2 font-bold')
+                ui.button('Add Node', icon='add', color='green', 
+                         on_click=lambda: self._add_node_to_dialog(nodes_container, node_inputs)) \
+                    .props('dense outline')
             
+            # Nodes container
+            nodes_container = ui.column().classes('w-full gap-2')
+            
+            nodes = preset.get('nodes', [])
             node_inputs = []
-            for node_idx, node in enumerate(nodes):
-                with ui.expansion(f"Node {node_idx + 1}: {node.get('name_node', '')}") \
-                    .classes('w-full mb-2'):
-                    with ui.column().classes('w-full gap-2 p-2'):
-                        node_data = {
-                            'name': ui.input('Node Name', value=node.get('name_node', '')) \
-                                .classes('w-full').props('outlined dense'),
-                            'sid': ui.input('SID', value=node.get('SID', '')) \
-                                .classes('w-full').props('outlined dense'),
-                            'node_id': ui.number('Node ID', value=node.get('ID_node', 0), min=0) \
-                                .classes('w-full').props('outlined dense'),
-                            'area_id': ui.number('Area ID', value=node.get('area_id', 0), min=0, max=99) \
-                                .classes('w-full').props('outlined dense'),
-                        }
-                        node_inputs.append(node_data)
-                        ui.label('💡 URL: ...areaID=${area_id}').classes('text-caption text-grey-7')
+            
+            with nodes_container:
+                for node_idx, node in enumerate(nodes):
+                    self._create_node_card(node_inputs, node_idx, node, nodes_container)
             
             ui.separator().classes('my-4')
             
             # Actions
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Save', color='primary', on_click=lambda: self._save_preset_edit(
-                    preset_idx, preset_name_input, preset_id_input, node_inputs, dialog
+                ui.button('Save & Continue', color='primary', icon='save', 
+                         on_click=lambda: self._save_preset_edit(
+                    preset_idx, preset_name_input, preset_id_input, node_inputs, dialog, reopen=True
                 ))
+                ui.button('Save & Close', color='green', icon='check',
+                         on_click=lambda: self._save_preset_edit(
+                    preset_idx, preset_name_input, preset_id_input, node_inputs, dialog, reopen=False
+                )).props('outline')
         
         dialog.open()
     
-    def _save_preset_edit(self, preset_idx, preset_name_input, preset_id_input, node_inputs, dialog):
+    def _create_node_card(self, node_inputs, node_idx, node, container):
+        """Create a node input card with delete button."""
+        with ui.expansion(f"Node {node_idx + 1}: {node.get('name_node', 'New Node')}") \
+            .classes('w-full') as expansion:
+            with ui.column().classes('w-full gap-2 p-2'):
+                node_data = {
+                    'name': ui.input('Node Name', value=node.get('name_node', '')) \
+                        .classes('w-full').props('outlined dense'),
+                    'sid': ui.input('SID', value=node.get('SID', '')) \
+                        .classes('w-full').props('outlined dense'),
+                    'node_id': ui.number('Node ID', value=node.get('ID_node', 0), min=0) \
+                        .classes('w-full').props('outlined dense'),
+                    'area_id': ui.number('Area ID', value=node.get('area_id', 0), min=0, max=99) \
+                        .classes('w-full').props('outlined dense'),
+                    'expansion': expansion
+                }
+                ui.label('💡 URL: ...areaID=${area_id}').classes('text-caption text-grey-7')
+                
+                # Delete button
+                ui.button('Delete Node', icon='delete', color='red',
+                         on_click=lambda n=node_data: self._remove_node_from_dialog(n, node_inputs)) \
+                    .props('dense flat').classes('mt-2')
+                
+                node_inputs.append(node_data)
+    
+    def _add_node_to_dialog(self, container, node_inputs):
+        """Add a new node to the edit dialog."""
+        node_idx = len(node_inputs)
+        new_node = {
+            'name_node': f'New Node {node_idx + 1}',
+            'SID': '',
+            'ID_node': node_idx,
+            'area_id': node_idx
+        }
+        
+        with container:
+            self._create_node_card(node_inputs, node_idx, new_node, container)
+        
+        notify_custom(f'➕ Node {node_idx + 1} added', type='info')
+    
+    def _remove_node_from_dialog(self, node_data, node_inputs):
+        """Remove a node from the edit dialog."""
+        # Remove from list
+        node_inputs.remove(node_data)
+        
+        # Remove UI element
+        node_data['expansion'].delete()
+        
+        notify_custom('🗑️ Node removed', type='info')
+    
+    def _save_preset_edit(self, preset_idx, preset_name_input, preset_id_input, node_inputs, dialog, reopen=False):
         """Save preset edit."""
         # Update preset data
         preset = self.camera_data['preset_thermals'][preset_idx]
         preset['preset_name'] = preset_name_input.value
         preset['preset_id'] = int(preset_id_input.value)
         
-        # Update nodes
-        for idx, node_data in enumerate(node_inputs):
-            if idx < len(preset['nodes']):
-                preset['nodes'][idx].update({
-                    'name_node': node_data['name'].value,
-                    'SID': node_data['sid'].value,
-                    'ID_node': int(node_data['node_id'].value),
-                    'area_id': int(node_data['area_id'].value)
-                })
+        # Rebuild nodes list from inputs (handles add/delete)
+        new_nodes = []
+        for node_data in node_inputs:
+            new_nodes.append({
+                'name_node': node_data['name'].value,
+                'SID': node_data['sid'].value,
+                'ID_node': int(node_data['node_id'].value),
+                'area_id': int(node_data['area_id'].value)
+            })
         
-        dialog.close()
-        notify_custom('✅ Preset updated! Reloading...', type='positive')
-        # Delay reload to show notification
-        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
+        preset['nodes'] = new_nodes
+        
+        # Save to config file
+        if save_config_file(self.cam_idx, self.camera_data):
+            if reopen:
+                # Save & Continue: just update and notify, keep dialog open
+                notify_custom('✅ Preset saved! You can continue editing.', type='positive')
+                # Reload camera data in background to sync
+                self._reload_camera_data()
+            else:
+                # Save & Close: close dialog and refresh list
+                notify_custom('✅ Preset updated!', type='positive')
+                dialog.close()
+                self._reload_camera_data()
+                self._render_presets.refresh()
+        else:
+            notify_custom('❌ Failed to save preset', type='negative')
     
     def _add_preset_dialog(self):
         """Open dialog to add new preset."""
@@ -393,10 +512,19 @@ class CameraEditor:
             self.camera_data['preset_thermals'] = []
         
         self.camera_data['preset_thermals'].append(new_preset)
-        dialog.close()
-        notify_custom('✅ Preset added! Reloading...', type='positive')
-        # Delay reload to show notification
-        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
+        
+        # Save to config file
+        if save_config_file(self.cam_idx, self.camera_data):
+            dialog.close()
+            notify_custom('✅ Preset added!', type='positive')
+            # Reload camera data and refresh preset UI
+            self._reload_camera_data()
+            self._render_presets.refresh()
+            # Open edit dialog for the newly added preset
+            new_preset_idx = len(self.camera_data['preset_thermals']) - 1
+            ui.timer(0.3, lambda: self._edit_preset_dialog(new_preset_idx), once=True)
+        else:
+            notify_custom('❌ Failed to save preset', type='negative')
     
     def _delete_preset(self, preset_idx: int):
         """Delete preset with confirmation."""
@@ -417,10 +545,48 @@ class CameraEditor:
     def _confirm_delete_preset(self, preset_idx: int, dialog):
         """Confirm and delete preset."""
         del self.camera_data['preset_thermals'][preset_idx]
-        dialog.close()
-        notify_custom('⚠️ Preset deleted!', type='warning')
-        # Delay reload to show notification
-        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
+        
+        # Save to config file
+        if save_config_file(self.cam_idx, self.camera_data):
+            dialog.close()
+            notify_custom('⚠️ Preset deleted!', type='warning')
+            # Reload camera data and refresh preset UI
+            self._reload_camera_data()
+            self._render_presets.refresh()
+        else:
+            notify_custom('❌ Failed to delete preset', type='negative')
+
+
+def clean_auto_generated_urls(camera_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Remove auto-generated URLs from camera data before saving.
+    These URLs will be regenerated from templates on load.
+    """
+    import copy
+    cleaned_data = copy.deepcopy(camera_data)
+    
+    # Remove auto-generated camera-level URLs
+    cleaned_data.pop('url_snapshot', None)
+    cleaned_data.pop('url_ptz_base', None)
+    cleaned_data.pop('url_get_rtsp_url', None)
+    
+    # Remove global settings (should be at global level, not camera level)
+    cleaned_data.pop('url_templates', None)
+    cleaned_data.pop('img_server_host', None)
+    
+    # Clean preset_thermals
+    if 'preset_thermals' in cleaned_data:
+        for preset in cleaned_data['preset_thermals']:
+            # Remove auto-generated preset URL
+            preset.pop('url_presetID', None)
+            
+            # Clean nodes
+            if 'nodes' in preset:
+                for node in preset['nodes']:
+                    # Remove auto-generated node URL
+                    node.pop('url_areaTemperature', None)
+    
+    return cleaned_data
 
 
 def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
@@ -439,9 +605,12 @@ def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
         with open(DEFAULT_CONFIG_PATH, 'r', encoding='utf-8') as f:
             config = json.load(f)
         
+        # Clean auto-generated URLs before saving
+        cleaned_data = clean_auto_generated_urls(camera_data)
+        
         # Update camera data
         if cam_idx < len(config['cameras']):
-            config['cameras'][cam_idx] = camera_data
+            config['cameras'][cam_idx] = cleaned_data
         else:
             return False
         
@@ -456,25 +625,12 @@ def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
         return False
 
 
-def test_notifications():
-    """Test all notification types."""
-    notify_custom('✅ Success! Configuration saved', type='positive')
-    notify_custom('❌ Error! Something went wrong', type='negative')
-    notify_custom('⚠️ Warning! Please check settings', type='warning')
-    notify_custom('ℹ️ Info: Action completed', type='info')
-
-
 def show_settings_tab():
     """Show settings tab with camera configuration editor."""
     ui.label('Camera Configuration').classes('text-h5 font-bold mb-4')
     
     # Buttons row
-    with ui.row().classes('w-full justify-between mb-4'):
-        # Test notifications button
-        with ui.row().classes('gap-2'):
-            ui.button('Test Notifications', icon='notifications', color='blue',
-                     on_click=lambda: test_notifications()).props('outline')
-        
+    with ui.row().classes('w-full justify-end mb-4'):
         # Refresh button
         ui.button('Refresh', icon='refresh', on_click=lambda: ui.navigate.reload()) \
             .props('outline')
@@ -506,7 +662,7 @@ def add_new_camera():
     with ui.dialog() as dialog, ui.card().classes('w-full max-w-xl'):
         ui.label('Add New Camera').classes('text-h6 mb-4')
         
-        camera_name = ui.input('Camera Name', placeholder='e.g., 000100010009') \
+        camera_sid = ui.input('Camera SID', placeholder='e.g., 000100010009') \
             .classes('w-full mb-2').props('outlined')
         camera_ip = ui.input('Camera IP', placeholder='e.g., 192.168.1.172') \
             .classes('w-full mb-2').props('outlined')
@@ -520,7 +676,7 @@ def add_new_camera():
         with ui.row().classes('w-full justify-end gap-2'):
             ui.button('Cancel', on_click=dialog.close).props('flat')
             ui.button('Add', color='primary', on_click=lambda: _save_new_camera(
-                camera_name.value, camera_ip.value, username.value, password.value, dialog
+                camera_sid.value, camera_ip.value, username.value, password.value, dialog
             ))
     
     dialog.open()
@@ -529,7 +685,7 @@ def add_new_camera():
 def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
     """Save new camera to config."""
     if not name or not ip:
-        notify_custom('❌ Camera name and IP are required', type='negative')
+        notify_custom('❌ Camera SID and IP are required', type='negative')
         return
     
     try:
@@ -539,22 +695,14 @@ def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
         
         # Create new camera
         new_camera = {
-            'camera_name': name,
+            'camera_sid': name,
             'camera_ip': ip,
             'username': username,
             'password': password,
             'interval_seconds': 30,
             'timeout_seconds': 5,
             'settle_seconds': 5,
-            'preset_thermals': [],
-            'img_server_host': '192.168.1.163',
-            'url_templates': {
-                'preset': 'http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1&action=presetInvoke&presetID=${preset_id}',
-                'area_temperature': 'http://${camera_ip}/cgi-bin/param.cgi?action=get&type=areaTemperature&cameraID=1&areaID=${area_id}',
-                'rtsp': 'http://${camera_ip}/cgi-bin/video.cgi?type=RTSP&cameraID=1&streamID=1',
-                'snapshot': 'http://${camera_ip}/cgi-bin/image.cgi?cameraID=1&quality=5',
-                'ptz_base': 'http://${camera_ip}/cgi-bin/ptz.cgi?cameraID=1'
-            }
+            'preset_thermals': []
         }
         
         config['cameras'].append(new_camera)
