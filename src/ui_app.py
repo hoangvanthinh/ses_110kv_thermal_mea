@@ -9,6 +9,23 @@ USERNAME = "admin"
 PASSWORD = "1234"
 
 
+def notify_custom(message: str, type: str = 'positive'):
+    """
+    Custom notification with better styling.
+    
+    Args:
+        message: Message to display
+        type: 'positive', 'negative', 'warning', or 'info'
+    """
+    ui.notify(
+        message,
+        position='top-right',
+        type=type,
+        close_button=True,
+        timeout=5000,
+    )
+
+
 class CameraEditor:
     """Camera configuration editor with data binding."""
     
@@ -22,22 +39,51 @@ class CameraEditor:
     
     def render(self):
         """Render camera editor UI."""
+        # Get saved expansion and tab state
+        storage_key = f'camera_{self.cam_idx}'
+        is_expanded = app.storage.user.get(f'{storage_key}_expanded', False)
+        active_camera_tab = app.storage.user.get(f'{storage_key}_tab', 'basic')
+        
         with ui.expansion(
             f"📹 {self.camera_data.get('camera_name', f'Camera {self.cam_idx+1}')}", 
-            icon='videocam'
+            icon='videocam',
+            value=is_expanded
         ).classes('w-full mb-4') as expansion:
+            # Save expansion state when toggled
+            expansion.on_value_change(
+                lambda e, key=storage_key: app.storage.user.update({f'{key}_expanded': e.value})
+            )
+            
             with ui.card().classes('w-full'):
-                self._render_basic_info()
-                ui.separator().classes('my-4')
-                self._render_presets()
-                ui.separator().classes('my-4')
-                self._render_urls()
+                # Create tabs
+                with ui.tabs().classes('w-full') as tabs:
+                    basic_tab = ui.tab('basic', label='Basic', icon='info')
+                    preset_tab = ui.tab('preset', label='Presets', icon='dashboard')
+                    additional_tab = ui.tab('additional', label='Additional', icon='settings')
+                
+                # Save camera tab state when changed
+                tabs.on_value_change(
+                    lambda e, key=storage_key: app.storage.user.update({f'{key}_tab': e.value})
+                )
+                
+                # Create tab panels
+                with ui.tab_panels(tabs, value=active_camera_tab).classes('w-full'):
+                    with ui.tab_panel('basic'):
+                        self._render_basic_info()
+                        
+                    with ui.tab_panel('preset'):
+                        self._render_presets()
+                        
+                    with ui.tab_panel('additional'):
+                        self._render_urls()
+                
+                # Actions at the bottom (outside tabs)
                 ui.separator().classes('my-4')
                 self._render_actions()
     
     def _render_basic_info(self):
         """Render basic camera information section."""
-        ui.label('Basic Information').classes('text-subtitle1 font-bold mb-2')
+        ui.label('Camera Configuration').classes('text-subtitle2 text-grey-7 mb-3')
         
         with ui.grid(columns=2).classes('w-full gap-4 mb-4'):
             self.inputs['camera_name'] = ui.input(
@@ -83,9 +129,14 @@ class CameraEditor:
     
     def _render_presets(self):
         """Render presets section."""
-        ui.label('PTZ Presets & Thermal Nodes').classes('text-subtitle1 font-bold mb-2')
-        
         presets = self.camera_data.get('preset_thermals', [])
+        
+        # Summary header
+        with ui.row().classes('w-full items-center justify-between mb-3'):
+            ui.label('PTZ Presets & Thermal Nodes').classes('text-subtitle2 text-grey-7')
+            with ui.badge(str(len(presets)), color='primary'):
+                ui.tooltip(f'{len(presets)} preset(s) configured')
+        
         if not presets:
             ui.label('No presets configured').classes('text-warning')
             with ui.row().classes('mt-2'):
@@ -148,16 +199,33 @@ class CameraEditor:
     
     def _render_urls(self):
         """Render additional settings section."""
-        ui.label('Additional Settings').classes('text-subtitle1 font-bold mb-2')
-        with ui.column().classes('w-full gap-2'):
+        ui.label('Additional Settings & URL Templates').classes('text-subtitle2 text-grey-7 mb-3')
+        
+        with ui.column().classes('w-full gap-4'):
+            # Image Server
+            ui.label('📷 Image Server').classes('text-subtitle2 font-bold')
             self.inputs['img_server_host'] = ui.input(
                 'Image Server Host', 
                 value=self.camera_data.get('img_server_host', ''),
                 placeholder='e.g., 192.168.1.163'
-            ).classes('w-full').props('outlined dense')
+            ).classes('w-full').props('outlined')
+            ui.label('Server to store snapshot images').classes('text-caption text-grey-7')
             
-            ui.label('💡 URLs are auto-generated from url_templates', ) \
-                .classes('text-caption text-grey-7 mt-2')
+            ui.separator()
+            
+            # URL Templates Info
+            ui.label('🔗 URL Templates').classes('text-subtitle2 font-bold')
+            ui.label('💡 All camera URLs are auto-generated from these templates:').classes('text-caption text-grey-7 mb-2')
+            
+            url_templates = self.camera_data.get('url_templates', {})
+            if url_templates:
+                with ui.expansion('View URL Templates', icon='visibility').classes('w-full'):
+                    for key, template in url_templates.items():
+                        with ui.row().classes('w-full items-center gap-2 mb-2'):
+                            ui.label(f'{key}:').classes('text-weight-bold min-w-32')
+                            ui.label(template).classes('text-grey-7 text-xs break-all')
+            else:
+                ui.label('⚠️ No URL templates configured').classes('text-warning')
     
     def _render_actions(self):
         """Render action buttons."""
@@ -191,29 +259,30 @@ class CameraEditor:
             
             # Validate
             if not updated_data['camera_name']:
-                ui.notify('❌ Camera name is required', type='negative')
+                notify_custom('❌ Camera name is required', type='negative')
                 return
             
             if not updated_data['camera_ip']:
-                ui.notify('❌ Camera IP is required', type='negative')
+                notify_custom('❌ Camera IP is required', type='negative')
                 return
             
             # Save to config
             if save_config_file(self.cam_idx, updated_data):
-                ui.notify('✅ Configuration saved successfully!', type='positive')
+                notify_custom('✅ Configuration saved! Reloading...', type='positive')
+                # Delay reload to show notification
                 if self.on_save_callback:
-                    self.on_save_callback()
+                    ui.timer(1.0, self.on_save_callback, once=True)
             else:
-                ui.notify('❌ Failed to save configuration', type='negative')
+                notify_custom('❌ Failed to save configuration', type='negative')
         
         except Exception as e:
-            ui.notify(f'❌ Error: {str(e)}', type='negative')
+            notify_custom(f'❌ Error: {str(e)}', type='negative')
     
     def _cancel_changes(self):
         """Cancel changes and reload."""
-        ui.notify('Cancelled', type='info')
-        # Reload page to reset
-        ui.navigate.reload()
+        notify_custom('ℹ️ Changes cancelled. Reloading...', type='info')
+        # Delay reload to show notification
+        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
     def _edit_preset_dialog(self, preset_idx: int):
         """Open dialog to edit preset."""
@@ -283,8 +352,9 @@ class CameraEditor:
                 })
         
         dialog.close()
-        ui.notify('✅ Preset updated', type='positive')
-        ui.navigate.reload()
+        notify_custom('✅ Preset updated! Reloading...', type='positive')
+        # Delay reload to show notification
+        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
     def _add_preset_dialog(self):
         """Open dialog to add new preset."""
@@ -310,7 +380,7 @@ class CameraEditor:
     def _save_new_preset(self, name: str, preset_id: int, dialog):
         """Save new preset."""
         if not name:
-            ui.notify('❌ Preset name is required', type='negative')
+            notify_custom('❌ Preset name is required', type='negative')
             return
         
         new_preset = {
@@ -324,8 +394,9 @@ class CameraEditor:
         
         self.camera_data['preset_thermals'].append(new_preset)
         dialog.close()
-        ui.notify('✅ Preset added', type='positive')
-        ui.navigate.reload()
+        notify_custom('✅ Preset added! Reloading...', type='positive')
+        # Delay reload to show notification
+        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
     def _delete_preset(self, preset_idx: int):
         """Delete preset with confirmation."""
@@ -347,8 +418,9 @@ class CameraEditor:
         """Confirm and delete preset."""
         del self.camera_data['preset_thermals'][preset_idx]
         dialog.close()
-        ui.notify('✅ Preset deleted', type='positive')
-        ui.navigate.reload()
+        notify_custom('⚠️ Preset deleted!', type='warning')
+        # Delay reload to show notification
+        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
 
 
 def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
@@ -384,12 +456,26 @@ def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
         return False
 
 
+def test_notifications():
+    """Test all notification types."""
+    notify_custom('✅ Success! Configuration saved', type='positive')
+    notify_custom('❌ Error! Something went wrong', type='negative')
+    notify_custom('⚠️ Warning! Please check settings', type='warning')
+    notify_custom('ℹ️ Info: Action completed', type='info')
+
+
 def show_settings_tab():
     """Show settings tab with camera configuration editor."""
     ui.label('Camera Configuration').classes('text-h5 font-bold mb-4')
     
-    # Refresh button
-    with ui.row().classes('w-full justify-end mb-4'):
+    # Buttons row
+    with ui.row().classes('w-full justify-between mb-4'):
+        # Test notifications button
+        with ui.row().classes('gap-2'):
+            ui.button('Test Notifications', icon='notifications', color='blue',
+                     on_click=lambda: test_notifications()).props('outline')
+        
+        # Refresh button
         ui.button('Refresh', icon='refresh', on_click=lambda: ui.navigate.reload()) \
             .props('outline')
     
@@ -443,7 +529,7 @@ def add_new_camera():
 def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
     """Save new camera to config."""
     if not name or not ip:
-        ui.notify('❌ Camera name and IP are required', type='negative')
+        notify_custom('❌ Camera name and IP are required', type='negative')
         return
     
     try:
@@ -478,20 +564,27 @@ def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
             json.dump(config, f, indent=2, ensure_ascii=False)
         
         dialog.close()
-        ui.notify('✅ Camera added successfully!', type='positive')
-        ui.navigate.reload()
+        notify_custom('✅ Camera added! Reloading...', type='positive')
+        # Delay reload to show notification
+        ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
     except Exception as e:
-        ui.notify(f'❌ Error: {str(e)}', type='negative')
+        notify_custom(f'❌ Error: {str(e)}', type='negative')
 
 
 def show_main_ui(out_queue):
+    # Restore last active tab from storage (default: 'h' for Home)
+    active_tab = app.storage.user.get('active_tab', 'h')
+    
     with ui.tabs() as tabs:
         ui.tab('h', label='Home', icon='home')
         ui.tab('s', label='Setup', icon='settings')
         ui.tab('a', label='About', icon='info')
+    
+    # Save active tab to storage when changed
+    tabs.on_value_change(lambda e: app.storage.user.update({'active_tab': e.value}))
 
-    with ui.tab_panels(tabs, value='h').classes('w-full'):
+    with ui.tab_panels(tabs, value=active_tab).classes('w-full'):
         with ui.tab_panel('h'):
             ui.label('Main Content')
             temp_label = ui.label('Waiting for data...')
@@ -541,12 +634,93 @@ def login_screen():
                 app.storage.user['logged_in'] = True
                 ui.navigate.to('/')
             else:
-                ui.notify('❌ Wrong credentials', color='negative')
+                notify_custom('❌ Wrong credentials', type='negative')
 
         ui.button('Login', on_click=attempt_login).classes('mt-2')
 
 
 def register_pages(out_queue):
+    # Add custom CSS for better toast notifications
+    ui.add_head_html('''
+        <style>
+            /* Beautiful toast notification styling */
+            .q-notification {
+                z-index: 99999 !important;
+                min-width: 350px !important;
+                font-size: 16px !important;
+                font-weight: 600 !important;
+                padding: 20px 24px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+                animation: slideInRight 0.3s ease-out !important;
+            }
+            
+            /* Success - Green gradient */
+            .q-notification--positive {
+                background: linear-gradient(135deg, #4CAF50, #45a049) !important;
+                color: white !important;
+                border-left: 5px solid #2E7D32 !important;
+            }
+            
+            /* Error - Red gradient */
+            .q-notification--negative {
+                background: linear-gradient(135deg, #F44336, #e53935) !important;
+                color: white !important;
+                border-left: 5px solid #C62828 !important;
+            }
+            
+            /* Warning - Orange gradient */
+            .q-notification--warning {
+                background: linear-gradient(135deg, #FF9800, #fb8c00) !important;
+                color: white !important;
+                border-left: 5px solid #E65100 !important;
+            }
+            
+            /* Info - Blue gradient */
+            .q-notification--info {
+                background: linear-gradient(135deg, #2196F3, #1e88e5) !important;
+                color: white !important;
+                border-left: 5px solid #1565C0 !important;
+            }
+            
+            /* Slide in from right animation */
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            /* Position */
+            .q-notifications__list--top-right {
+                top: 20px !important;
+                right: 20px !important;
+                z-index: 99999 !important;
+            }
+            
+            /* Message text */
+            .q-notification__message {
+                color: white !important;
+                font-weight: 600 !important;
+                line-height: 1.5 !important;
+            }
+            
+            /* Close button */
+            .q-notification__actions .q-btn {
+                color: rgba(255, 255, 255, 0.95) !important;
+            }
+            
+            .q-notification__actions .q-btn:hover {
+                background: rgba(255, 255, 255, 0.2) !important;
+                border-radius: 50% !important;
+            }
+        </style>
+    ''')
+    
     @ui.page('/')
     def main_page():
         if not app.storage.user.get('logged_in'):
