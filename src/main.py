@@ -13,11 +13,11 @@ def main() -> None:
     # Initialize worker manager
     worker_manager = WorkerManager()
     
-    # Start all workers
-    threads, out_queue = worker_manager.start_all()
+    # Start all workers - returns threads, mqtt_queue, ui_queue
+    threads, out_queue, ui_queue = worker_manager.start_all()
 
-    # UI setup
-    register_pages(out_queue)
+    # UI setup - pass both queues
+    register_pages(out_queue, ui_queue)
 
     # Register shutdown hook
     @app.on_shutdown

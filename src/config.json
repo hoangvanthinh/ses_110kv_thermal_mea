@@ -107,7 +107,7 @@
     {
       "camera_name": "Camera Tram 2",
       "camera_sid": "1255236552",
-      "camera_ip": "192.168.1.22",
+      "camera_ip": "192.168.1.220",
       "username": "admin",
       "password": "123456",
       "interval_seconds": 30,

@@ -12,6 +12,7 @@ from workers.mqtt_subscriber import mqtt_subscriber_worker
 from workers.rtsp_fetcher import rtsp_fetcher_worker
 from workers.ptz_controller import ptz_controller_worker
 from workers.mode_manager import ModeManager
+from workers.ping_monitor import ping_monitor_worker
 
 
 log = get_logger("worker_manager")
@@ -42,10 +43,11 @@ class WorkerThreads:
     rtsp_fetcher: Optional[threading.Thread] = None
     ptz_controllers: List[threading.Thread] = field(default_factory=list)
     mode_timeout_checker: Optional[threading.Thread] = None
+    ping_monitors: List[threading.Thread] = field(default_factory=list)
     
     def all_threads(self) -> List[threading.Thread]:
         """Return all non-None threads as a flat list."""
-        threads = self.camera_threads + self.ptz_controllers
+        threads = self.camera_threads + self.ptz_controllers + self.ping_monitors
         if self.mqtt_publisher:
             threads.append(self.mqtt_publisher)
         if self.mqtt_subscriber:
@@ -65,6 +67,7 @@ class WorkerManager:
         self.config = load_config()
         self.stop_event = threading.Event()
         self.out_queue: "queue.Queue[dict]" = queue.Queue(maxsize=100)
+        self.ui_queue: "queue.Queue[dict]" = queue.Queue(maxsize=100)  # Separate queue for UI-only messages
         self.cmd_queues = CommandQueues()
         self.threads = WorkerThreads()
         self.mode_manager = ModeManager(default_manual_timeout=300)  # 5 minutes default
@@ -76,6 +79,7 @@ class WorkerManager:
         for idx, camera_cfg in enumerate(self.config.get("cameras", []), start=1):
             camera_name = str(camera_cfg.get("camera_sid") or f"camera_{idx}")
             
+            # Thermal poller thread
             thread = threading.Thread(
                 target=poller_worker,
                 args=(
@@ -204,7 +208,38 @@ class WorkerManager:
         log.info("Started mode timeout checker")
         return thread
     
-    def start_all(self) -> Tuple[WorkerThreads, "queue.Queue[dict]"]:
+    def start_ping_monitors(self) -> List[threading.Thread]:
+        """Start ping monitor threads for all cameras."""
+        threads = []
+        
+        for camera_cfg in self.config.get("cameras", []):
+            camera_sid = camera_cfg.get("camera_sid")
+            camera_ip = camera_cfg.get("camera_ip")
+            
+            if not camera_sid or not camera_ip:
+                log.warning(f"Skipping ping monitor - missing camera_sid or camera_ip in config")
+                continue
+            
+            log.info(f"Starting ping monitor for {camera_sid} ({camera_ip})")
+            thread = threading.Thread(
+                target=ping_monitor_worker,
+                args=(
+                    camera_sid,
+                    camera_ip,
+                    15,  # Ping every 15 seconds
+                    self.ui_queue,  # Use UI queue instead of out_queue
+                    self.stop_event
+                ),
+                daemon=True,
+                name=f"ping-monitor:{camera_sid}",
+            )
+            thread.start()
+            threads.append(thread)
+        
+        log.info("Started %d ping monitor(s)", len(threads))
+        return threads
+    
+    def start_all(self) -> Tuple[WorkerThreads, "queue.Queue[dict]", "queue.Queue[dict]"]:
         """Start all worker threads."""
         log.info("Starting all workers...")
         
@@ -214,16 +249,18 @@ class WorkerManager:
         self.threads.rtsp_fetcher = self.start_rtsp_fetcher()
         self.threads.ptz_controllers = self.start_ptz_controllers()
         self.threads.mode_timeout_checker = self.start_mode_timeout_checker()
+        self.threads.ping_monitors = self.start_ping_monitors()
         
         mqtt_status = "enabled" if self.threads.mqtt_subscriber else "disabled"
         log.info(
-            "All workers started: %d camera(s), %d PTZ controller(s), MQTT=%s",
+            "All workers started: %d camera(s), %d PTZ controller(s), %d ping monitor(s), MQTT=%s",
             len(self.threads.camera_threads),
             len(self.threads.ptz_controllers),
+            len(self.threads.ping_monitors),
             mqtt_status
         )
         
-        return self.threads, self.out_queue
+        return self.threads, self.out_queue, self.ui_queue
     
     def stop_all(self) -> None:
         """Stop all worker threads gracefully."""
@@ -232,9 +269,14 @@ class WorkerManager:
         # Signal stop to all threads
         self.stop_event.set()
         
-        # Send sentinel to publisher queue
+        # Send sentinel to both queues
         try:
             self.out_queue.put_nowait(None)
+        except queue.Full:
+            pass
+        
+        try:
+            self.ui_queue.put_nowait(None)
         except queue.Full:
             pass
         

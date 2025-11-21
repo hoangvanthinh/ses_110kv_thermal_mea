@@ -2,11 +2,21 @@ from nicegui import ui, app
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 from config_loader import load_config, DEFAULT_CONFIG_PATH
 
 
 USERNAME = "admin"
 PASSWORD = "1234"
+
+# Global state for ping status: {camera_sid: is_online}
+PING_STATUS: Dict[str, bool] = {}
+
+# Global state for latest temperature readings: {camera_sid: {node: data}}
+LATEST_TEMPS: Dict[str, Dict[str, Any]] = {}
+
+# Global state for recent events (limited to last 50)
+RECENT_EVENTS: List[Dict[str, Any]] = []
 
 
 def notify_custom(message: str, type: str = 'positive'):
@@ -52,14 +62,38 @@ class CameraEditor:
         is_expanded = app.storage.user.get(f'{storage_key}_expanded', False)
         active_camera_tab = app.storage.user.get(f'{storage_key}_tab', 'basic')
         
-        camera_display_name = self.camera_data.get('camera_name', 
-                                                    self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}'))
+        camera_sid = self.camera_data.get('camera_sid')
         
-        with ui.expansion(
-            f"📹 {camera_display_name}", 
+        def get_title():
+            name = self.camera_data.get('camera_name', 
+                                       self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}'))
+            
+            # Get ping status
+            is_online = PING_STATUS.get(camera_sid)
+            indicator = "⚪" # Unknown/Pending
+            if is_online is True:
+                indicator = "🟢"
+            elif is_online is False:
+                indicator = "🔴"
+                
+            return f"{indicator} {name}"
+        
+        expansion = ui.expansion(
+            get_title(), 
             icon='videocam',
             value=is_expanded
-        ).classes('w-full mb-3 bg-white shadow-md rounded-lg border-l-4 border-orange-400 hover:shadow-lg transition-shadow') as expansion:
+        ).classes('w-full mb-3 bg-white shadow-md rounded-lg border-l-4 border-orange-400 hover:shadow-lg transition-shadow')
+        
+        # Update title periodically to reflect ping status
+        def update_header():
+            new_title = get_title()
+            if expansion._props.get('label') != new_title:
+                expansion._props['label'] = new_title
+                expansion.update()
+            
+        ui.timer(1.0, update_header)
+        
+        with expansion:
             # Save expansion state when toggled
             expansion.on_value_change(
                 lambda e, key=storage_key: app.storage.user.update({f'{key}_expanded': e.value})
@@ -735,6 +769,8 @@ def show_settings_tab():
         return
     
     # Render each camera editor
+
+    
     for cam_idx, camera in enumerate(cameras):
         editor = CameraEditor(camera, cam_idx, on_save_callback=lambda: ui.navigate.reload())
         editor.render()
@@ -811,7 +847,7 @@ def _save_new_camera(name: str, sid: str, ip: str, username: str, password: str,
         notify_custom(f'❌ Error: {str(e)}', type='negative')
 
 
-def show_main_ui(out_queue):
+def show_main_ui(out_queue, ui_queue):
     # Restore last active tab from storage (default: 'h' for Home)
     active_tab = app.storage.user.get('active_tab', 'h')
     
@@ -838,9 +874,53 @@ def show_main_ui(out_queue):
             # Tab panels on the right side
             with ui.tab_panels(tabs, value=active_tab).props('vertical').classes('w-full h-full'):
                 with ui.tab_panel('h'):
+                    # Dashboard Header
+                    with ui.row().classes('w-full mb-4 gap-4'):
+                        ui.label('📊 Dashboard').classes('text-3xl font-bold text-gray-800')
+                    
+                    # Overview Cards Row
+                    with ui.row().classes('w-full gap-4 mb-4'):
+                        # Total Cameras Card
+                        with ui.card().classes('flex-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg'):
+                            ui.label('Total Cameras').classes('text-sm opacity-90 mb-1')
+                            total_cameras_label = ui.label('0').classes('text-4xl font-bold')
+                            ui.icon('videocam').classes('text-5xl opacity-20 absolute bottom-2 right-2')
+                        
+                        # Online Cameras Card
+                        with ui.card().classes('flex-1 bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg'):
+                            ui.label('Online').classes('text-sm opacity-90 mb-1')
+                            online_cameras_label = ui.label('0').classes('text-4xl font-bold')
+                            ui.icon('check_circle').classes('text-5xl opacity-20 absolute bottom-2 right-2')
+                        
+                        # Offline Cameras Card
+                        with ui.card().classes('flex-1 bg-gradient-to-br from-red-500 to-red-600 text-white shadow-lg'):
+                            ui.label('Offline').classes('text-sm opacity-90 mb-1')
+                            offline_cameras_label = ui.label('0').classes('text-4xl font-bold')
+                            ui.icon('cancel').classes('text-5xl opacity-20 absolute bottom-2 right-2')
+                        
+                        # MQTT Status Card
+                        with ui.card().classes('flex-1 bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg'):
+                            ui.label('MQTT Status').classes('text-sm opacity-90 mb-1')
+                            mqtt_status_label = ui.label('Connected').classes('text-2xl font-bold')
+                            ui.icon('cloud').classes('text-5xl opacity-20 absolute bottom-2 right-2')
+                    
+                    # Camera Status Grid
+                    with ui.card().classes('w-full mb-4'):
+                        ui.label('🎥 Camera Status').classes('text-xl font-bold mb-4 text-gray-800')
+                        camera_status_container = ui.column().classes('w-full gap-2')
+                    
+                    # Recent Temperature Readings
+                    with ui.card().classes('w-full mb-4'):
+                        ui.label('🌡️ Recent Temperature Readings').classes('text-xl font-bold mb-4 text-gray-800')
+                        temp_readings_container = ui.column().classes('w-full gap-2')
+                    
+                    # Recent Events
                     with ui.card().classes('w-full'):
-                        ui.label('Main Content').classes('text-h5 font-bold mb-4')
-                        temp_label = ui.label('Waiting for data...')
+                        with ui.row().classes('w-full items-center mb-4'):
+                            ui.label('📋 Recent Events').classes('text-xl font-bold text-gray-800')
+                            ui.space()
+                            ui.button('Clear', icon='delete', on_click=lambda: RECENT_EVENTS.clear()).props('outline size=sm color=red')
+                        events_container = ui.column().classes('w-full gap-1 max-h-64 overflow-y-auto')
 
                 with ui.tab_panel('s'):
                     show_settings_tab()
@@ -862,14 +942,146 @@ def show_main_ui(out_queue):
     # Update data
     def update_ui():
         try:
-            data = out_queue.get_nowait()
-            if data.get('type') == 'temperature':
-                text = f'{data["node_thermal"]}: {data.get("temperature", {}).get("value", "N/A")} °C at {data["timestamp"]}'
-                temp_label.text = text
-        except Exception:
-            pass
-
+            # Process up to 10 messages at once to avoid backlog
+            for _ in range(10):
+                # First check UI queue for ping status
+                if not ui_queue.empty():
+                    data = ui_queue.get_nowait()
+                    msg_type = data.get('type')
+                    
+                    if msg_type == 'ping_status':
+                        camera_sid = data.get('camera_sid')
+                        status = data.get('status')
+                        print(f"UI received ping status: {camera_sid} -> {status}")  # Debug log
+                        if camera_sid:
+                            PING_STATUS[camera_sid] = (status == 'online')
+                            # Add to recent events
+                            event = {
+                                'time': datetime.now().strftime('%H:%M:%S'),
+                                'type': 'ping',
+                                'message': f"Camera {camera_sid}: {status}",
+                                'status': status
+                            }
+                            RECENT_EVENTS.insert(0, event)
+                            if len(RECENT_EVENTS) > 50:
+                                RECENT_EVENTS.pop()
+                
+                # Then check main queue for temperature data
+                if not out_queue.empty():
+                    data = out_queue.get_nowait()
+                    msg_type = data.get('type')
+                    
+                    if msg_type == 'temperature':
+                        camera_sid = data.get('camera')
+                        node_thermal = data.get('node_thermal')
+                        temp_data = data.get('temperature', {})
+                        
+                        # Update latest temps
+                        if camera_sid not in LATEST_TEMPS:
+                            LATEST_TEMPS[camera_sid] = {}
+                        LATEST_TEMPS[camera_sid][node_thermal] = {
+                            'value': temp_data.get('value', 'N/A'),
+                            'timestamp': data.get('timestamp', ''),
+                            'time': datetime.now().strftime('%H:%M:%S')
+                        }
+                        
+                        # Add to recent events
+                        event = {
+                            'time': datetime.now().strftime('%H:%M:%S'),
+                            'type': 'temperature',
+                            'message': f"{camera_sid}/{node_thermal}: {temp_data.get('value', 'N/A')} °C",
+                            'status': 'normal'
+                        }
+                        RECENT_EVENTS.insert(0, event)
+                        if len(RECENT_EVENTS) > 50:
+                            RECENT_EVENTS.pop()
+                        
+        except Exception as e:
+            print(f"Error in update_ui: {e}")
+    
+    # Update dashboard stats
+    def update_dashboard():
+        try:
+            config = load_config()
+            cameras = config.get('cameras', [])
+            total = len(cameras)
+            online = sum(1 for sid in [c.get('camera_sid') for c in cameras] if PING_STATUS.get(sid) == True)
+            offline = sum(1 for sid in [c.get('camera_sid') for c in cameras] if PING_STATUS.get(sid) == False)
+            
+            total_cameras_label.text = str(total)
+            online_cameras_label.text = str(online)
+            offline_cameras_label.text = str(offline)
+            
+            # Update camera status grid
+            camera_status_container.clear()
+            for camera in cameras:
+                sid = camera.get('camera_sid')
+                name = camera.get('camera_name', sid)
+                ip = camera.get('camera_ip', 'N/A')
+                is_online = PING_STATUS.get(sid)
+                
+                with camera_status_container:
+                    with ui.card().classes('w-full p-3 hover:shadow-lg transition-shadow'):
+                        with ui.row().classes('w-full items-center gap-4'):
+                            # Status indicator
+                            if is_online is True:
+                                ui.icon('check_circle').classes('text-3xl text-green-500')
+                            elif is_online is False:
+                                ui.icon('cancel').classes('text-3xl text-red-500')
+                            else:
+                                ui.icon('help').classes('text-3xl text-gray-400')
+                            
+                            # Camera info
+                            with ui.column().classes('flex-1'):
+                                ui.label(name).classes('font-bold text-lg')
+                                ui.label(f'SID: {sid} | IP: {ip}').classes('text-sm text-gray-600')
+                            
+                            # Latest temp
+                            with ui.column().classes('items-end'):
+                                if sid in LATEST_TEMPS and LATEST_TEMPS[sid]:
+                                    latest_node = list(LATEST_TEMPS[sid].keys())[-1]
+                                    latest_temp = LATEST_TEMPS[sid][latest_node]
+                                    ui.label(f"{latest_temp['value']} °C").classes('text-2xl font-bold text-orange-600')
+                                    ui.label(f"{latest_node} @ {latest_temp['time']}").classes('text-xs text-gray-500')
+                                else:
+                                    ui.label('No data').classes('text-sm text-gray-400')
+            
+            # Update temperature readings
+            temp_readings_container.clear()
+            with temp_readings_container:
+                if not LATEST_TEMPS:
+                    ui.label('Waiting for temperature data...').classes('text-gray-500 italic')
+                else:
+                    for camera_sid, nodes in LATEST_TEMPS.items():
+                        for node_name, temp_info in nodes.items():
+                            with ui.card().classes('w-full p-2 bg-gray-50'):
+                                with ui.row().classes('w-full items-center gap-3'):
+                                    ui.icon('thermostat').classes('text-2xl text-orange-500')
+                                    with ui.column().classes('flex-1'):
+                                        ui.label(f"{camera_sid} / {node_name}").classes('font-semibold')
+                                        ui.label(f"@ {temp_info['time']}").classes('text-xs text-gray-500')
+                                    ui.label(f"{temp_info['value']} °C").classes('text-xl font-bold text-orange-600')
+            
+            # Update events
+            events_container.clear()
+            with events_container:
+                if not RECENT_EVENTS:
+                    ui.label('No events yet...').classes('text-gray-500 italic')
+                else:
+                    for event in RECENT_EVENTS[:20]:  # Show last 20
+                        icon = 'wifi' if event['type'] == 'ping' else 'thermostat'
+                        color = 'text-green-600' if event.get('status') == 'online' else 'text-red-600' if event.get('status') == 'offline' else 'text-blue-600'
+                        
+                        with ui.row().classes('w-full items-center gap-2 py-1 border-b border-gray-200'):
+                            ui.label(event['time']).classes('text-xs text-gray-500 w-20')
+                            ui.icon(icon).classes(f'text-sm {color}')
+                            ui.label(event['message']).classes('text-sm flex-1')
+        
+        except Exception as e:
+            print(f"Error in update_dashboard: {e}")
+    
     ui.timer(0.5, update_ui)
+    ui.timer(1.0, update_dashboard)
 
 
 def login_screen():
@@ -889,7 +1101,7 @@ def login_screen():
         ui.button('Login', on_click=attempt_login).classes('mt-2')
 
 
-def register_pages(out_queue):
+def register_pages(out_queue, ui_queue):
     # Add custom CSS for better toast notifications and blue background
     ui.add_head_html('''
         <style>
@@ -947,6 +1159,37 @@ def register_pages(out_queue):
             
             .q-card .q-tabs .q-tab__label {
                 font-size: 12px !important;
+            }
+            
+            /* Ping Indicator Animation */
+            .ping-dot {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-right: 8px;
+                transition: background-color 0.3s ease;
+            }
+            
+            .ping-online {
+                background-color: #4CAF50;
+                box-shadow: 0 0 8px #4CAF50;
+                animation: pulse-green 2s infinite;
+            }
+            
+            .ping-offline {
+                background-color: #F44336;
+                box-shadow: 0 0 8px #F44336;
+            }
+            
+            .ping-unknown {
+                background-color: #9E9E9E;
+            }
+            
+            @keyframes pulse-green {
+                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7); }
+                70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(76, 175, 80, 0); }
+                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(76, 175, 80, 0); }
             }
             
             /* Beautiful toast notification styling */
@@ -1036,7 +1279,7 @@ def register_pages(out_queue):
         if not app.storage.user.get('logged_in'):
             ui.navigate.to('/login')
         else:
-            show_main_ui(out_queue)
+            show_main_ui(out_queue, ui_queue)
 
     @ui.page('/login')
     def login_page():

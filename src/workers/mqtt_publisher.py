@@ -72,6 +72,10 @@ def mqtt_publisher_worker(
             if item is None:
                 break
 
+            # Skip ping_status messages (UI only)
+            if item.get('type') == 'ping_status':
+                continue
+
             log.info("Publishing item: %s", item.get('type'))
 
             if item.get('type') == 'temperature':
