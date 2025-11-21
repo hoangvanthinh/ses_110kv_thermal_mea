@@ -52,19 +52,22 @@ class CameraEditor:
         is_expanded = app.storage.user.get(f'{storage_key}_expanded', False)
         active_camera_tab = app.storage.user.get(f'{storage_key}_tab', 'basic')
         
+        camera_display_name = self.camera_data.get('camera_name', 
+                                                    self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}'))
+        
         with ui.expansion(
-            f"📹 {self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}')}", 
+            f"📹 {camera_display_name}", 
             icon='videocam',
             value=is_expanded
-        ).classes('w-full mb-4') as expansion:
+        ).classes('w-full mb-3 bg-white shadow-md rounded-lg border-l-4 border-orange-400 hover:shadow-lg transition-shadow') as expansion:
             # Save expansion state when toggled
             expansion.on_value_change(
                 lambda e, key=storage_key: app.storage.user.update({f'{key}_expanded': e.value})
             )
             
-            with ui.card().classes('w-full'):
-                # Create tabs
-                with ui.tabs().classes('w-full') as tabs:
+            with ui.card().classes('w-full shadow-none'):
+                # Create tabs - modern, clean design
+                with ui.tabs().props('dense inline-label').classes('text-sm') as tabs:
                     basic_tab = ui.tab('basic', label='Basic', icon='info')
                     preset_tab = ui.tab('preset', label='Presets', icon='dashboard')
                     additional_tab = ui.tab('additional', label='Additional', icon='settings')
@@ -75,7 +78,7 @@ class CameraEditor:
                 )
                 
                 # Create tab panels
-                with ui.tab_panels(tabs, value=active_camera_tab).classes('w-full'):
+                with ui.tab_panels(tabs, value=active_camera_tab).classes('w-full pt-4'):
                     with ui.tab_panel('basic'):
                         self._render_basic_info()
                         
@@ -90,169 +93,253 @@ class CameraEditor:
                 self._render_actions()
     
     def _render_basic_info(self):
-        """Render basic camera information section."""
-        ui.label('Camera Configuration').classes('text-subtitle2 text-grey-7 mb-3')
+        """Render basic camera information section with modern UX."""
+        # Section header
+        with ui.row().classes('w-full items-center mb-4'):
+            ui.icon('badge', size='sm').classes('text-sky-600')
+            ui.label('Camera Information').classes('text-lg font-semibold text-sky-700 ml-2')
         
-        with ui.grid(columns=2).classes('w-full gap-4 mb-4'):
-            self.inputs['camera_sid'] = ui.input(
-                'Camera SID', 
-                value=self.camera_data.get('camera_sid', '')
-            ).classes('w-full').props('outlined')
-            
-            self.inputs['camera_ip'] = ui.input(
-                'Camera IP', 
-                value=self.camera_data.get('camera_ip', '')
-            ).classes('w-full').props('outlined')
-            
-            self.inputs['username'] = ui.input(
-                'Username', 
-                value=self.camera_data.get('username', '')
-            ).classes('w-full').props('outlined')
-            
-            self.inputs['password'] = ui.input(
-                'Password', 
-                value=self.camera_data.get('password', ''),
-                password=True,
-                password_toggle_button=True
-            ).classes('w-full').props('outlined')
+        # Identity section
+        with ui.card().classes('w-full mb-4 p-4 bg-gradient-to-br from-sky-50 to-white'):
+            ui.label('Identity').classes('text-sm font-bold text-sky-700 mb-3')
+            with ui.grid(columns=2).classes('w-full gap-4'):
+                with ui.column().classes('w-full'):
+                    self.inputs['camera_name'] = ui.input(
+                        'Camera Name',
+                        value=self.camera_data.get('camera_name', ''),
+                        placeholder='e.g., Camera Ba Son 1'
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('Display name for this camera').classes('text-xs text-grey-600 mt-1')
+                
+                with ui.column().classes('w-full'):
+                    self.inputs['camera_sid'] = ui.input(
+                        'Camera SID',
+                        value=self.camera_data.get('camera_sid', ''),
+                        placeholder='e.g., 000100010008'
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('Unique identifier for the camera').classes('text-xs text-grey-600 mt-1')
         
-        with ui.grid(columns=3).classes('w-full gap-4 mb-4'):
-            self.inputs['interval_seconds'] = ui.number(
-                'Interval (s)', 
-                value=self.camera_data.get('interval_seconds', 30),
-                min=1, max=300
-            ).classes('w-full').props('outlined')
+        # Connection section
+        with ui.card().classes('w-full mb-4 p-4 bg-gradient-to-br from-orange-50 to-white'):
+            ui.label('Connection').classes('text-sm font-bold text-orange-700 mb-3')
+            with ui.grid(columns=2).classes('w-full gap-4'):
+                with ui.column().classes('w-full'):
+                    self.inputs['camera_ip'] = ui.input(
+                        'Camera IP',
+                        value=self.camera_data.get('camera_ip', ''),
+                        placeholder='e.g., 192.168.1.171'
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('IP address of the camera').classes('text-xs text-grey-600 mt-1')
+                
+                with ui.column().classes('w-full'):
+                    self.inputs['username'] = ui.input(
+                        'Username',
+                        value=self.camera_data.get('username', ''),
+                        placeholder='admin'
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('Authentication username').classes('text-xs text-grey-600 mt-1')
             
-            self.inputs['timeout_seconds'] = ui.number(
-                'Timeout (s)', 
-                value=self.camera_data.get('timeout_seconds', 5),
-                min=1, max=30
-            ).classes('w-full').props('outlined')
-            
-            self.inputs['settle_seconds'] = ui.number(
-                'Settle (s)', 
-                value=self.camera_data.get('settle_seconds', 5),
-                min=1, max=30
-            ).classes('w-full').props('outlined')
+            with ui.column().classes('w-full mt-2'):
+                self.inputs['password'] = ui.input(
+                    'Password',
+                    value=self.camera_data.get('password', ''),
+                    password=True,
+                    password_toggle_button=True,
+                    placeholder='••••••••'
+                ).classes('w-full').props('outlined dense')
+                ui.label('Authentication password').classes('text-xs text-grey-600 mt-1')
+        
+        # Timing configuration section
+        with ui.card().classes('w-full p-4 bg-gradient-to-br from-sky-50 to-white'):
+            ui.label('Timing Configuration').classes('text-sm font-bold text-sky-700 mb-3')
+            with ui.grid(columns=3).classes('w-full gap-4'):
+                with ui.column().classes('w-full'):
+                    self.inputs['interval_seconds'] = ui.number(
+                        'Interval (s)',
+                        value=self.camera_data.get('interval_seconds', 30),
+                        min=1, max=300
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('Polling interval').classes('text-xs text-grey-600 mt-1')
+                
+                with ui.column().classes('w-full'):
+                    self.inputs['timeout_seconds'] = ui.number(
+                        'Timeout (s)',
+                        value=self.camera_data.get('timeout_seconds', 5),
+                        min=1, max=30
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('Request timeout').classes('text-xs text-grey-600 mt-1')
+                
+                with ui.column().classes('w-full'):
+                    self.inputs['settle_seconds'] = ui.number(
+                        'Settle (s)',
+                        value=self.camera_data.get('settle_seconds', 5),
+                        min=1, max=30
+                    ).classes('w-full').props('outlined dense')
+                    ui.label('PTZ settle time').classes('text-xs text-grey-600 mt-1')
     
     @ui.refreshable
     def _render_presets(self):
-        """Render presets section."""
+        """Render presets section in modern tree structure."""
         presets = self.camera_data.get('preset_thermals', [])
         
-        # Summary header
-        with ui.row().classes('w-full items-center justify-between mb-3'):
-            ui.label('PTZ Presets & Thermal Nodes').classes('text-subtitle2 text-grey-7')
-            with ui.badge(str(len(presets)), color='primary'):
-                ui.tooltip(f'{len(presets)} preset(s) configured')
+        # Add preset button and count badge
+        with ui.row().classes('w-full items-center justify-between mb-4'):
+            ui.button(
+                '➕ Add Preset', 
+                icon='add_circle_outline', 
+                color='orange',
+                on_click=lambda: self._add_preset_dialog()
+            ).props('outline dense')
+            
+            if presets:
+                with ui.badge(str(len(presets)), color='sky'):
+                    ui.tooltip(f'{len(presets)} preset(s) configured')
         
         if not presets:
-            ui.label('No presets configured').classes('text-warning')
-            with ui.row().classes('mt-2'):
-                ui.button('Add First Preset', icon='add', color='green', 
-                         on_click=lambda: self._add_preset_dialog())
+            # Empty state
+            with ui.card().classes('w-full p-8 text-center bg-gradient-to-br from-orange-50 to-white'):
+                ui.icon('dashboard_customize', size='xl').classes('text-orange-300 mb-3')
+                ui.label('No presets configured yet').classes('text-orange-600 font-medium mb-2')
+                ui.label('Click "Add Preset" to create your first preset').classes('text-sm text-grey-600')
         else:
-            # Table header
-            with ui.row().classes('w-full font-bold mb-2 bg-blue-grey-1 p-2 rounded'):
-                ui.label('Preset').classes('w-32')
-                ui.label('Nodes').classes('flex-grow')
-                ui.label('Actions').classes('w-32')
-            
-            # Each preset as a row
+            # Tree structure with modern cards
             for preset_idx, preset in enumerate(presets):
-                self._render_preset_row(preset, preset_idx)
-            
-            # Add preset button
-            with ui.row().classes('w-full justify-center mt-2'):
-                ui.button('Add Preset', icon='add', color='green', 
-                         on_click=lambda: self._add_preset_dialog())
+                self._render_preset_tree_node(preset, preset_idx)
     
-    def _render_preset_row(self, preset: Dict[str, Any], preset_idx: int):
-        """Render a single preset row."""
-        with ui.card().classes('w-full mb-2 p-3 hover:shadow-lg transition-shadow'):
-            with ui.row().classes('w-full items-center gap-4'):
-                # Preset name
-                with ui.column().classes('w-32'):
-                    ui.label(f"🎯 {preset.get('preset_name', f'Preset {preset_idx+1}')}") \
-                        .classes('font-bold text-primary')
-                    ui.label(f"ID: {preset_idx + 1}").classes('text-xs text-grey')
-                
-                # Nodes info
-                with ui.column().classes('flex-grow'):
-                    nodes = preset.get('nodes', [])
-                    if nodes:
-                        with ui.row().classes('flex-wrap gap-2'):
-                            for node_idx, node in enumerate(nodes):
-                                with ui.badge(f"{node.get('name_node', f'Node {node_idx+1}')}") \
-                                    .props('color=teal'):
-                                    ui.tooltip(
-                                        f"SID: {node.get('SID', 'N/A')}\n"
-                                        f"Area ID: {node.get('ID_node', 'N/A')}"
-                                    )
-                    else:
-                        ui.label('No nodes').classes('text-grey italic')
+    def _render_preset_tree_node(self, preset: Dict[str, Any], preset_idx: int):
+        """Render a preset as a modern tree node."""
+        preset_name = preset.get('preset_name', f'Preset {preset_idx+1}')
+        preset_id = preset.get('preset_id', preset_idx+1)
+        nodes = preset.get('nodes', [])
+        
+        # Preset card with modern design
+        with ui.card().classes('w-full mb-3 p-0 shadow-md hover:shadow-lg transition-all'):
+            # Preset header
+            with ui.row().classes('w-full items-center justify-between p-4 bg-gradient-to-r from-sky-100 via-white to-orange-50'):
+                with ui.row().classes('items-center gap-3'):
+                    ui.icon('dashboard', size='md').classes('text-sky-600')
+                    with ui.column().classes('gap-0'):
+                        ui.label(preset_name).classes('text-base font-bold text-sky-700')
+                        ui.label(f'Preset ID: {preset_id} • {len(nodes)} node(s)').classes('text-xs text-grey-600')
                 
                 # Actions
-                with ui.column().classes('w-32 gap-1'):
-                    ui.button(
-                        icon='edit', 
-                        color='blue',
-                        on_click=lambda idx=preset_idx: self._edit_preset_dialog(idx)
-                    ).props('flat dense').tooltip('Edit Preset')
+                with ui.row().classes('gap-1'):
+                    ui.button(icon='edit', color='sky',
+                             on_click=lambda idx=preset_idx: self._edit_preset_dialog(idx)) \
+                        .props('flat dense round').tooltip('Edit')
+                    ui.button(icon='delete', color='red',
+                             on_click=lambda idx=preset_idx: self._delete_preset(idx)) \
+                        .props('flat dense round').tooltip('Delete')
+            
+            # Nodes section
+            if nodes:
+                with ui.column().classes('w-full p-4 pt-2 bg-white'):
+                    ui.label(f'📍 Thermal Nodes ({len(nodes)})').classes('text-xs font-semibold text-grey-700 mb-2')
                     
-                    ui.button(
-                        icon='delete', 
-                        color='red',
-                        on_click=lambda idx=preset_idx: self._delete_preset(idx)
-                    ).props('flat dense').tooltip('Delete Preset')
+                    with ui.grid(columns='repeat(auto-fill, minmax(250px, 1fr))').classes('w-full gap-3'):
+                        for node_idx, node in enumerate(nodes):
+                            self._render_node_compact_card(node, node_idx)
+            else:
+                with ui.row().classes('w-full p-4 justify-center bg-orange-50'):
+                    ui.icon('info_outline', size='sm').classes('text-orange-400')
+                    ui.label('No nodes configured').classes('text-sm text-orange-600 ml-2')
+    
+    def _render_node_compact_card(self, node: Dict[str, Any], node_idx: int):
+        """Render a node as a compact card."""
+        node_name = node.get('name_node', f'Node {node_idx+1}')
+        node_sid = node.get('SID', 'N/A')
+        area_id = node.get('area_id', 0)
+        node_id = node.get('ID_node', 0)
+        
+        with ui.card().classes('w-full p-3 bg-gradient-to-br from-orange-50 to-white border-l-2 border-orange-400'):
+            with ui.row().classes('w-full items-start justify-between mb-2'):
+                with ui.row().classes('items-center gap-2'):
+                    ui.icon('sensors', size='sm').classes('text-orange-600')
+                    ui.label(node_name).classes('text-sm font-semibold text-orange-700')
+            
+            with ui.column().classes('w-full gap-1'):
+                with ui.row().classes('items-center'):
+                    ui.label('SID:').classes('text-xs font-medium text-grey-600 w-16')
+                    ui.label(node_sid).classes('text-xs text-grey-800 font-mono')
+                
+                with ui.row().classes('items-center'):
+                    ui.label('Node ID:').classes('text-xs font-medium text-grey-600 w-16')
+                    ui.label(str(node_id)).classes('text-xs text-grey-800')
+                
+                with ui.row().classes('items-center'):
+                    ui.label('Area ID:').classes('text-xs font-medium text-grey-600 w-16')
+                    ui.label(str(area_id)).classes('text-xs text-grey-800')
     
     def _render_urls(self):
-        """Render additional settings section."""
-        ui.label('Additional Settings & URL Templates').classes('text-subtitle2 text-grey-7 mb-3')
-        
-        with ui.column().classes('w-full gap-4'):
-            # Image Server
-            ui.label('📷 Image Server').classes('text-subtitle2 font-bold')
+        """Render additional settings section with modern design."""
+        # Image Server section
+        with ui.card().classes('w-full mb-4 p-4 bg-gradient-to-br from-sky-50 to-white'):
+            with ui.row().classes('w-full items-center mb-3'):
+                ui.icon('cloud_upload', size='sm').classes('text-sky-600')
+                ui.label('Image Server').classes('text-sm font-bold text-sky-700 ml-2')
+            
             self.inputs['img_server_host'] = ui.input(
-                'Image Server Host', 
+                'Server Host',
                 value=self.camera_data.get('img_server_host', ''),
                 placeholder='e.g., 192.168.1.163'
-            ).classes('w-full').props('outlined')
-            ui.label('Server to store snapshot images').classes('text-caption text-grey-7')
+            ).classes('w-full').props('outlined dense')
+            ui.label('Server to store snapshot images').classes('text-xs text-grey-600 mt-1')
+        
+        # URL Templates section
+        with ui.card().classes('w-full p-4 bg-gradient-to-br from-orange-50 to-white'):
+            with ui.row().classes('w-full items-center mb-3'):
+                ui.icon('link', size='sm').classes('text-orange-600')
+                ui.label('URL Templates').classes('text-sm font-bold text-orange-700 ml-2')
             
-            ui.separator()
-            
-            # URL Templates Info
-            ui.label('🔗 URL Templates').classes('text-subtitle2 font-bold')
-            ui.label('💡 All camera URLs are auto-generated from these templates:').classes('text-caption text-grey-7 mb-2')
+            ui.label('All camera URLs are auto-generated from these templates using ${camera_ip}, ${preset_id}, and ${area_id} variables.') \
+                .classes('text-xs text-grey-600 mb-3')
             
             url_templates = self.camera_data.get('url_templates', {})
             if url_templates:
-                with ui.expansion('View URL Templates', icon='visibility').classes('w-full'):
-                    for key, template in url_templates.items():
-                        with ui.row().classes('w-full items-center gap-2 mb-2'):
-                            ui.label(f'{key}:').classes('text-weight-bold min-w-32')
-                            ui.label(template).classes('text-grey-7 text-xs break-all')
+                with ui.expansion('View Templates', icon='code').classes('w-full bg-white'):
+                    with ui.column().classes('w-full gap-2 p-2'):
+                        for key, template in url_templates.items():
+                            with ui.card().classes('w-full p-2 bg-grey-50'):
+                                ui.label(key).classes('text-xs font-bold text-sky-700 mb-1')
+                                ui.label(template).classes('text-xs text-grey-700 font-mono break-all')
             else:
-                ui.label('⚠️ No URL templates configured').classes('text-warning')
+                with ui.row().classes('items-center p-3 bg-orange-100 rounded'):
+                    ui.icon('warning', size='sm').classes('text-orange-600')
+                    ui.label('No URL templates configured').classes('text-sm text-orange-700 ml-2')
     
     def _render_actions(self):
-        """Render action buttons."""
-        with ui.row().classes('w-full justify-between gap-2'):
-            # Delete button on the left
-            ui.button('Delete Camera', icon='delete', color='red', 
-                     on_click=self._delete_camera).props('outline')
-            
-            # Save/Cancel buttons on the right
-            with ui.row().classes('gap-2'):
-                ui.button('Cancel', icon='close', color='grey', 
-                         on_click=self._cancel_changes).props('outline')
-                ui.button('Save Changes', icon='save', color='primary', 
-                         on_click=self._save_changes)
+        """Render action buttons with modern design."""
+        with ui.card().classes('w-full p-4 bg-gradient-to-r from-grey-50 to-sky-50'):
+            with ui.row().classes('w-full justify-between items-center'):
+                # Delete button on the left - Danger zone
+                with ui.row().classes('items-center gap-2'):
+                    ui.icon('warning', size='sm').classes('text-red-600')
+                    ui.button(
+                        'Delete Camera', 
+                        icon='delete_forever', 
+                        color='red',
+                        on_click=self._delete_camera
+                    ).props('outline dense')
+                
+                # Primary actions on the right
+                with ui.row().classes('gap-2'):
+                    ui.button(
+                        'Cancel', 
+                        icon='close', 
+                        color='grey',
+                        on_click=self._cancel_changes
+                    ).props('outline dense')
+                    ui.button(
+                        'Save Changes', 
+                        icon='check_circle', 
+                        color='sky',
+                        on_click=self._save_changes
+                    ).props('dense')
     
     def _collect_data(self) -> Dict[str, Any]:
         """Collect data from all inputs."""
         data = {
+            'camera_name': self.inputs['camera_name'].value,
             'camera_sid': self.inputs['camera_sid'].value,
             'camera_ip': self.inputs['camera_ip'].value,
             'username': self.inputs['username'].value,
@@ -301,10 +388,10 @@ class CameraEditor:
     
     def _delete_camera(self):
         """Delete camera with confirmation dialog."""
-        camera_sid = self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}')
+        camera_name = self.camera_data.get('camera_name', self.camera_data.get('camera_sid', f'Camera {self.cam_idx+1}'))
         
         with ui.dialog() as dialog, ui.card():
-            ui.label(f'Delete Camera: {camera_sid}?').classes('text-h6 mb-4')
+            ui.label(f'Delete Camera: {camera_name}?').classes('text-h6 mb-4')
             ui.label('⚠️ This will permanently delete this camera and all its presets.').classes('text-warning mb-4')
             ui.label('This action cannot be undone.').classes('text-grey mb-4')
             
@@ -323,7 +410,8 @@ class CameraEditor:
             
             # Remove camera at index
             if self.cam_idx < len(config['cameras']):
-                camera_sid = config['cameras'][self.cam_idx].get('camera_sid', f'Camera {self.cam_idx+1}')
+                camera_name = config['cameras'][self.cam_idx].get('camera_name', 
+                    config['cameras'][self.cam_idx].get('camera_sid', f'Camera {self.cam_idx+1}'))
                 del config['cameras'][self.cam_idx]
                 
                 # Save to file
@@ -331,7 +419,7 @@ class CameraEditor:
                     json.dump(config, f, indent=2, ensure_ascii=False)
                 
                 dialog.close()
-                notify_custom(f'🗑️ Camera "{camera_sid}" deleted! Reloading...', type='warning')
+                notify_custom(f'🗑️ Camera "{camera_name}" deleted! Reloading...', type='warning')
                 # Delay reload to show notification
                 ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
             else:
@@ -360,7 +448,7 @@ class CameraEditor:
             # Nodes section header with Add button
             with ui.row().classes('w-full justify-between items-center mb-2'):
                 ui.label('Thermal Nodes:').classes('text-subtitle2 font-bold')
-                ui.button('Add Node', icon='add', color='green', 
+                ui.button('Add Node', icon='add', color='orange', 
                          on_click=lambda: self._add_node_to_dialog(nodes_container, node_inputs)) \
                     .props('dense outline')
             
@@ -379,11 +467,11 @@ class CameraEditor:
             # Actions
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Save & Continue', color='primary', icon='save', 
+                ui.button('Save & Continue', color='sky', icon='save', 
                          on_click=lambda: self._save_preset_edit(
                     preset_idx, preset_name_input, preset_id_input, node_inputs, dialog, reopen=True
                 ))
-                ui.button('Save & Close', color='green', icon='check',
+                ui.button('Save & Close', color='orange', icon='check',
                          on_click=lambda: self._save_preset_edit(
                     preset_idx, preset_name_input, preset_id_input, node_inputs, dialog, reopen=False
                 )).props('outline')
@@ -490,7 +578,7 @@ class CameraEditor:
             
             with ui.row().classes('w-full justify-end gap-2'):
                 ui.button('Cancel', on_click=dialog.close).props('flat')
-                ui.button('Add', color='primary', on_click=lambda: self._save_new_preset(
+                ui.button('Add', color='orange', on_click=lambda: self._save_new_preset(
                     preset_name.value, int(preset_id.value), dialog
                 ))
         
@@ -642,7 +730,7 @@ def show_settings_tab():
     if not cameras:
         ui.label('No cameras configured').classes('text-warning')
         with ui.row().classes('mt-4'):
-            ui.button('Add First Camera', icon='add_circle', color='green', 
+            ui.button('Add First Camera', icon='add_circle', color='orange', 
                      on_click=add_new_camera)
         return
     
@@ -653,7 +741,7 @@ def show_settings_tab():
     
     # Add new camera button
     with ui.row().classes('w-full justify-center mt-4'):
-        ui.button('Add New Camera', icon='add_circle', color='green', 
+        ui.button('Add New Camera', icon='add_circle', color='orange', 
                  on_click=add_new_camera).props('size=lg')
 
 
@@ -662,6 +750,8 @@ def add_new_camera():
     with ui.dialog() as dialog, ui.card().classes('w-full max-w-xl'):
         ui.label('Add New Camera').classes('text-h6 mb-4')
         
+        camera_name = ui.input('Camera Name', placeholder='e.g., Camera Ba Son 1') \
+            .classes('w-full mb-2').props('outlined')
         camera_sid = ui.input('Camera SID', placeholder='e.g., 000100010009') \
             .classes('w-full mb-2').props('outlined')
         camera_ip = ui.input('Camera IP', placeholder='e.g., 192.168.1.172') \
@@ -675,16 +765,16 @@ def add_new_camera():
         
         with ui.row().classes('w-full justify-end gap-2'):
             ui.button('Cancel', on_click=dialog.close).props('flat')
-            ui.button('Add', color='primary', on_click=lambda: _save_new_camera(
-                camera_sid.value, camera_ip.value, username.value, password.value, dialog
+            ui.button('Add', color='orange', on_click=lambda: _save_new_camera(
+                camera_name.value, camera_sid.value, camera_ip.value, username.value, password.value, dialog
             ))
     
     dialog.open()
 
 
-def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
+def _save_new_camera(name: str, sid: str, ip: str, username: str, password: str, dialog):
     """Save new camera to config."""
-    if not name or not ip:
+    if not sid or not ip:
         notify_custom('❌ Camera SID and IP are required', type='negative')
         return
     
@@ -695,7 +785,8 @@ def _save_new_camera(name: str, ip: str, username: str, password: str, dialog):
         
         # Create new camera
         new_camera = {
-            'camera_sid': name,
+            'camera_name': name or sid,  # Use SID as fallback if name is empty
+            'camera_sid': sid,
             'camera_ip': ip,
             'username': username,
             'password': password,
@@ -724,38 +815,49 @@ def show_main_ui(out_queue):
     # Restore last active tab from storage (default: 'h' for Home)
     active_tab = app.storage.user.get('active_tab', 'h')
     
-    with ui.tabs() as tabs:
-        ui.tab('h', label='Home', icon='home')
-        ui.tab('s', label='Setup', icon='settings')
-        ui.tab('a', label='About', icon='info')
+    def do_logout():
+        app.storage.user.pop('logged_in', None)
+        ui.navigate.to('/login')
+    
+    # Use splitter for vertical tabs layout
+    with ui.splitter(value=15).classes('w-full h-screen') as splitter:
+        with splitter.before:
+            # Container for tabs and logout button
+            with ui.column().classes('w-full h-full justify-between'):
+                # Vertical tabs on top
+                with ui.tabs().props('vertical').classes('w-full') as tabs:
+                    ui.tab('h', label='Home', icon='home')
+                    ui.tab('s', label='Setup', icon='settings')
+                    ui.tab('a', label='About', icon='info')
+                
+                # Logout button at bottom
+                ui.button('🚪 Logout', icon='logout', on_click=do_logout,
+                          color='red').props('outline dense size=sm').classes('w-full')
+        
+        with splitter.after:
+            # Tab panels on the right side
+            with ui.tab_panels(tabs, value=active_tab).props('vertical').classes('w-full h-full'):
+                with ui.tab_panel('h'):
+                    with ui.card().classes('w-full'):
+                        ui.label('Main Content').classes('text-h5 font-bold mb-4')
+                        temp_label = ui.label('Waiting for data...')
+
+                with ui.tab_panel('s'):
+                    show_settings_tab()
+
+                with ui.tab_panel('a'):
+                    with ui.card().classes('w-full'):
+                        ui.label('SES 110kV Thermal Camera Monitor').classes('text-h5 font-bold mb-2')
+                        ui.label('Version 1.0.0').classes('mb-4')
+                        ui.separator().classes('my-4')
+                        ui.label('Features:').classes('font-bold')
+                        ui.label('• Multi-camera thermal monitoring')
+                        ui.label('• PTZ control with Auto/Manual modes')
+                        ui.label('• MQTT integration')
+                        ui.label('• Real-time temperature display')
     
     # Save active tab to storage when changed
     tabs.on_value_change(lambda e: app.storage.user.update({'active_tab': e.value}))
-
-    with ui.tab_panels(tabs, value=active_tab).classes('w-full'):
-        with ui.tab_panel('h'):
-            ui.label('Main Content')
-            temp_label = ui.label('Waiting for data...')
-
-            def do_logout():
-                app.storage.user.pop('logged_in', None)
-                ui.navigate.to('/login')
-
-            ui.button('Logout', on_click=do_logout,
-                      color='red').classes('ml-auto')
-
-        with ui.tab_panel('s'):
-            show_settings_tab()
-
-        with ui.tab_panel('a'):
-            ui.label('SES 110kV Thermal Camera Monitor').classes('text-h5 font-bold mb-2')
-            ui.label('Version 1.0.0').classes('mb-4')
-            ui.separator().classes('my-4')
-            ui.label('Features:').classes('font-bold')
-            ui.label('• Multi-camera thermal monitoring')
-            ui.label('• PTZ control with Auto/Manual modes')
-            ui.label('• MQTT integration')
-            ui.label('• Real-time temperature display')
 
     # Update data
     def update_ui():
@@ -788,9 +890,65 @@ def login_screen():
 
 
 def register_pages(out_queue):
-    # Add custom CSS for better toast notifications
+    # Add custom CSS for better toast notifications and blue background
     ui.add_head_html('''
         <style>
+            /* Blue gradient background for entire page */
+            html, body {
+                background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 50%, #93C5FD 100%) !important;
+                min-height: 100vh !important;
+            }
+            
+            .q-page-container, .nicegui-content, .q-layout {
+                background: transparent !important;
+            }
+            
+            .q-page {
+                background: transparent !important;
+            }
+            
+            /* Vertical tabs - Orange highlight for active tab */
+            .q-tab--active {
+                background: linear-gradient(90deg, #FED7AA 0%, #FDBA74 100%) !important;
+                border-left: 4px solid #FB923C !important;
+                color: #EA580C !important;
+                font-weight: 700 !important;
+            }
+            
+            .q-tab {
+                border-radius: 8px !important;
+                margin: 4px 0 !important;
+                transition: all 0.3s ease !important;
+            }
+            
+            .q-tab:hover:not(.q-tab--active) {
+                background: rgba(251, 146, 60, 0.1) !important;
+            }
+            
+            .q-tab__icon {
+                font-size: 24px !important;
+            }
+            
+            .q-tab__label {
+                font-size: 15px !important;
+                font-weight: 500 !important;
+            }
+            
+            /* Camera tabs - smaller size */
+            .q-card .q-tabs .q-tab {
+                font-size: 12px !important;
+                padding: 4px 12px !important;
+                min-height: 36px !important;
+            }
+            
+            .q-card .q-tabs .q-tab__icon {
+                font-size: 16px !important;
+            }
+            
+            .q-card .q-tabs .q-tab__label {
+                font-size: 12px !important;
+            }
+            
             /* Beautiful toast notification styling */
             .q-notification {
                 z-index: 99999 !important;
@@ -871,6 +1029,10 @@ def register_pages(out_queue):
     
     @ui.page('/')
     def main_page():
+        # Add blue background to page
+        ui.colors(primary='#0ea5e9')  # sky-500
+        ui.query('body').classes('bg-gradient-to-br from-blue-100 to-sky-200')
+        
         if not app.storage.user.get('logged_in'):
             ui.navigate.to('/login')
         else:
@@ -878,4 +1040,6 @@ def register_pages(out_queue):
 
     @ui.page('/login')
     def login_page():
+        # Add blue background to login page
+        ui.query('body').classes('bg-gradient-to-br from-blue-100 to-sky-200')
         login_screen()

@@ -9,6 +9,7 @@
   "img_server_host": "192.168.1.163",
   "cameras": [
     {
+      "camera_name": "Camera Station 1",
       "camera_sid": "000100010008",
       "camera_ip": "192.168.1.171",
       "username": "admin",
@@ -18,14 +19,14 @@
       "settle_seconds": 5,
       "preset_thermals": [
         {
-          "preset_name": "KV1b",
+          "preset_name": "KV1",
           "preset_id": 1,
           "nodes": [
             {
-              "ID_node": 0,
+              "name_node": "Node KV1.1",
               "SID": "0001000100080",
-              "area_id": 0,
-              "name_node": "Node KV1.1"
+              "ID_node": 0,
+              "area_id": 0
             }
           ]
         },
@@ -104,8 +105,9 @@
       ]
     },
     {
-      "camera_sid": "00010009",
-      "camera_ip": "192.168.1.12",
+      "camera_name": "Camera Tram 2",
+      "camera_sid": "1255236552",
+      "camera_ip": "192.168.1.22",
       "username": "admin",
       "password": "123456",
       "interval_seconds": 30,
@@ -113,26 +115,14 @@
       "settle_seconds": 5,
       "preset_thermals": [
         {
-          "preset_name": "a1",
+          "preset_name": "A",
           "preset_id": 1,
           "nodes": [
             {
               "name_node": "New Node 1",
-              "SID": "31",
+              "SID": "12313f3",
               "ID_node": 0,
               "area_id": 0
-            },
-            {
-              "name_node": "New Node 2",
-              "SID": "a2",
-              "ID_node": 1,
-              "area_id": 1
-            },
-            {
-              "name_node": "New Node 3",
-              "SID": "a3",
-              "ID_node": 2,
-              "area_id": 2
             }
           ]
         }
