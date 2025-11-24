@@ -169,14 +169,17 @@ def rtsp_fetcher_worker(
     config = load_config()
     cameras = config.get("cameras", [])
     
-    # Build lookup for camera config by name
-    camera_lookup = {
-        str(cam.get("camera_name")): cam 
-        for cam in cameras 
-        if cam.get("camera_name")
-    }
+    # Build lookup for camera config by both name and sid
+    camera_lookup = {}
+    for cam in cameras:
+        cam_name = cam.get("camera_name")
+        cam_sid = cam.get("camera_sid")
+        if cam_name:
+            camera_lookup[str(cam_name)] = cam
+        if cam_sid:
+            camera_lookup[str(cam_sid)] = cam
     
-    log.info("RTSP fetcher started with %d camera(s)", len(camera_lookup))
+    log.info("RTSP fetcher started with %d camera(s)", len(cameras))
     
     while not stop_event.wait(0.5):
         try:

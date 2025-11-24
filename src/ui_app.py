@@ -404,10 +404,10 @@ class CameraEditor:
             
             # Save to config
             if save_config_file(self.cam_idx, updated_data):
-                notify_custom('✅ Configuration saved! Reloading...', type='positive')
-                # Delay reload to show notification
-                if self.on_save_callback:
-                    ui.timer(1.0, self.on_save_callback, once=True)
+                notify_custom('✅ Configuration saved! Click "Apply & Restart" to apply changes.', type='positive')
+                # Don't auto-reload, let user click restart button
+                # if self.on_save_callback:
+                #     ui.timer(1.0, self.on_save_callback, once=True)
             else:
                 notify_custom('❌ Failed to save configuration', type='negative')
         
@@ -453,7 +453,7 @@ class CameraEditor:
                     json.dump(config, f, indent=2, ensure_ascii=False)
                 
                 dialog.close()
-                notify_custom(f'🗑️ Camera "{camera_name}" deleted! Reloading...', type='warning')
+                notify_custom(f'🗑️ Camera "{camera_name}" deleted! Click "Apply & Restart" to apply changes.', type='warning')
                 # Delay reload to show notification
                 ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
             else:
@@ -747,38 +747,86 @@ def save_config_file(cam_idx: int, camera_data: Dict[str, Any]) -> bool:
         return False
 
 
-def show_settings_tab():
+def show_settings_tab(worker_manager):
     """Show settings tab with camera configuration editor."""
-    ui.label('Camera Configuration').classes('text-h5 font-bold mb-4')
     
-    # Buttons row
-    with ui.row().classes('w-full justify-end mb-4'):
-        # Refresh button
-        ui.button('Refresh', icon='refresh', on_click=lambda: ui.navigate.reload()) \
-            .props('outline')
+    # Sticky header - stays at top when scrolling
+    with ui.column().classes('w-full sticky top-0 bg-gradient-to-br from-blue-100 to-sky-200 z-50 shadow-lg px-4 py-4'):
+        # Header row with title and buttons
+        with ui.row().classes('w-full items-center mb-3'):
+            ui.label('Camera Configuration').classes('text-h5 font-bold flex-1')
+            
+            # Restart workers button
+            async def restart_workers():
+                try:
+                    restart_btn.disable()
+                    notify_custom('🔄 Restarting workers...', type='info')
+                    
+                    # Stop all workers
+                    worker_manager.stop_all()
+                    
+                    # Small delay to ensure clean shutdown
+                    import asyncio
+                    await asyncio.sleep(1)
+                    
+                    # Reload config
+                    worker_manager.config = load_config()
+                    
+                    # Clear stop event to allow restart
+                    worker_manager.stop_event.clear()
+                    
+                    # Restart all workers
+                    threads, out_queue, ui_queue = worker_manager.start_all()
+                    
+                    notify_custom('✅ Workers restarted successfully!', type='positive')
+                    
+                    # Reload page to reconnect UI
+                    ui.timer(1.5, lambda: ui.navigate.reload(), once=True)
+                    
+                except Exception as e:
+                    notify_custom(f'❌ Error restarting workers: {str(e)}', type='negative')
+                    restart_btn.enable()
+            
+            restart_btn = ui.button('🔄 Apply & Restart', 
+                     on_click=restart_workers,
+                     color='orange') \
+                .props('icon=restart_alt size=md').classes('mr-2') \
+                .tooltip('Apply configuration changes and restart all workers')
+            
+            # Refresh UI button
+            ui.button('Refresh UI', icon='refresh', on_click=lambda: ui.navigate.reload()) \
+                .props('outline')
+        
+        # Info message card
+        with ui.card().classes('w-full bg-blue-50 shadow-sm'):
+            with ui.row().classes('items-center gap-2'):
+                ui.icon('info').classes('text-blue-600')
+                ui.label('💡 After making changes, click "Apply & Restart" to reload the configuration and restart all workers.').classes('text-sm text-blue-800')
     
-    # Load current config
-    config = load_config()
-    cameras = config.get("cameras", [])
-    
-    if not cameras:
-        ui.label('No cameras configured').classes('text-warning')
-        with ui.row().classes('mt-4'):
-            ui.button('Add First Camera', icon='add_circle', color='orange', 
-                     on_click=add_new_camera)
-        return
-    
-    # Render each camera editor
+    # Scrollable content area
+    with ui.column().classes('w-full px-4 pb-8'):
+        # Load current config
+        config = load_config()
+        cameras = config.get("cameras", [])
+        
+        if not cameras:
+            ui.label('No cameras configured').classes('text-warning')
+            with ui.row().classes('mt-4'):
+                ui.button('Add First Camera', icon='add_circle', color='orange', 
+                         on_click=add_new_camera)
+            return
+        
+        # Render each camera editor
 
-    
-    for cam_idx, camera in enumerate(cameras):
-        editor = CameraEditor(camera, cam_idx, on_save_callback=lambda: ui.navigate.reload())
-        editor.render()
-    
-    # Add new camera button
-    with ui.row().classes('w-full justify-center mt-4'):
-        ui.button('Add New Camera', icon='add_circle', color='orange', 
-                 on_click=add_new_camera).props('size=lg')
+        
+        for cam_idx, camera in enumerate(cameras):
+            editor = CameraEditor(camera, cam_idx, on_save_callback=lambda: ui.navigate.reload())
+            editor.render()
+        
+        # Add new camera button
+        with ui.row().classes('w-full justify-center mt-4'):
+            ui.button('Add New Camera', icon='add_circle', color='orange', 
+                     on_click=add_new_camera).props('size=lg')
 
 
 def add_new_camera():
@@ -839,7 +887,7 @@ def _save_new_camera(name: str, sid: str, ip: str, username: str, password: str,
             json.dump(config, f, indent=2, ensure_ascii=False)
         
         dialog.close()
-        notify_custom('✅ Camera added! Reloading...', type='positive')
+        notify_custom('✅ Camera added! Click "Apply & Restart" to apply changes.', type='positive')
         # Delay reload to show notification
         ui.timer(1.0, lambda: ui.navigate.reload(), once=True)
     
@@ -847,7 +895,7 @@ def _save_new_camera(name: str, sid: str, ip: str, username: str, password: str,
         notify_custom(f'❌ Error: {str(e)}', type='negative')
 
 
-def show_main_ui(out_queue, ui_queue):
+def show_main_ui(out_queue, ui_queue, worker_manager):
     # Restore last active tab from storage (default: 'h' for Home)
     active_tab = app.storage.user.get('active_tab', 'h')
     
@@ -923,7 +971,9 @@ def show_main_ui(out_queue, ui_queue):
                         events_container = ui.column().classes('w-full gap-1 max-h-64 overflow-y-auto')
 
                 with ui.tab_panel('s'):
-                    show_settings_tab()
+                    # Settings tab with scrollable content and fixed height
+                    with ui.scroll_area().classes('w-full h-full'):
+                        show_settings_tab(worker_manager)
 
                 with ui.tab_panel('a'):
                     with ui.card().classes('w-full'):
@@ -1101,7 +1151,7 @@ def login_screen():
         ui.button('Login', on_click=attempt_login).classes('mt-2')
 
 
-def register_pages(out_queue, ui_queue):
+def register_pages(out_queue, ui_queue, worker_manager):
     # Add custom CSS for better toast notifications and blue background
     ui.add_head_html('''
         <style>
@@ -1279,7 +1329,7 @@ def register_pages(out_queue, ui_queue):
         if not app.storage.user.get('logged_in'):
             ui.navigate.to('/login')
         else:
-            show_main_ui(out_queue, ui_queue)
+            show_main_ui(out_queue, ui_queue, worker_manager)
 
     @ui.page('/login')
     def login_page():

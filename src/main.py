@@ -16,8 +16,8 @@ def main() -> None:
     # Start all workers - returns threads, mqtt_queue, ui_queue
     threads, out_queue, ui_queue = worker_manager.start_all()
 
-    # UI setup - pass both queues
-    register_pages(out_queue, ui_queue)
+    # UI setup - pass both queues and worker_manager
+    register_pages(out_queue, ui_queue, worker_manager)
 
     # Register shutdown hook
     @app.on_shutdown
